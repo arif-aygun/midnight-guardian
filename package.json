@@ -1,0 +1,25 @@
+{
+  "name": "midnight-guardian",
+  "version": "1.0.0",
+  "description": "Smart distraction blocker for Windows that helps you maintain healthy digital habits and protect your sleep schedule.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "run": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "active-win": "^8.2.1",
+    "express": "^5.1.0",
+    "node-notifier": "^10.0.1",
+    "node-schedule": "^2.1.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

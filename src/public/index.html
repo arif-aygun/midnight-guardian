@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Midnight Guardian - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌙 Midnight Guardian</h1>
+            <p>Automatic distraction blocker for better sleep and focus</p>
+            <div id="status" class="status inactive">
+                <span id="statusText">⏸️ Paused</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="button-group">
+                <button class="btn-primary" onclick="startMonitoring()">▶️ Start Monitoring</button>
+                <button class="btn-danger" onclick="stopMonitoring()">⏸️ Pause Monitoring</button>
+                <button class="btn-secondary" onclick="saveConfig()">💾 Save Configuration</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('config')">⚙️ Configuration</button>
+            <button class="tab" onclick="showTab('settings')">🔧 Settings</button>
+            <button class="tab" onclick="showTab('logs')">📊 Activity Logs</button>
+        </div>
+
+        <div id="configTab" class="tab-content active">
+            <!-- Block Keywords Section -->
+            <div class="config-section">
+                <div class="config-section-header" onclick="toggleSection(this)">
+                    <h3><span class="collapse-arrow">▼</span> 🚫 Block Keywords</h3>
+                </div>
+                <div class="config-section-content">
+                    <p>Add keywords that indicate distracting content (e.g., "youtube", "game", "reddit")</p>
+                    <div id="blockKeywords" class="keyword-list"></div>
+                    <div class="add-keyword">
+                        <input type="text" id="newBlockKeyword" placeholder="Enter keyword to block...">
+                        <button class="btn-danger" onclick="addBlockKeyword()">+ Add Block Keyword</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Allow Keywords Section -->
+            <div class="config-section">
+                <div class="config-section-header" onclick="toggleSection(this)">
+                    <h3><span class="collapse-arrow">▼</span> ✅ Allow Keywords</h3>
+                </div>
+                <div class="config-section-content">
+                    <p>Add keywords that indicate productive content (e.g., "tutorial", "documentation", "course")</p>
+                    <div id="allowKeywords" class="keyword-list"></div>
+                    <div class="add-keyword">
+                        <input type="text" id="newAllowKeyword" placeholder="Enter keyword to allow...">
+                        <button class="btn-primary" onclick="addAllowKeyword()">+ Add Allow Keyword</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blocklist Section -->
+            <div class="config-section">
+                <div class="config-section-header" onclick="toggleSection(this)">
+                    <h3><span class="collapse-arrow">▼</span> 🔴 Blocklist</h3>
+                </div>
+                <div class="config-section-content">
+                    <h4>Blocked Processes</h4>
+                    <p>Add specific applications to always block (e.g., "chrome.exe", "spotify.exe")</p>
+                    <div id="blocklistProcesses" class="keyword-list"></div>
+                    <div class="add-keyword">
+                        <input type="text" id="newBlocklistProcess" placeholder="Enter process name...">
+                        <button class="btn-danger" onclick="addBlocklistProcess()">+ Add Process</button>
+                    </div>
+
+                    <h4 style="margin-top: 20px;">Blocked Domains</h4>
+                    <p>Add specific domains or titles to always block</p>
+                    <div id="blocklistDomains" class="keyword-list"></div>
+                    <div class="add-keyword">
+                        <input type="text" id="newBlocklistDomain" placeholder="Enter domain or title...">
+                        <button class="btn-danger" onclick="addBlocklistDomain()">+ Add Domain</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Whitelist Section -->
+            <div class="config-section">
+                <div class="config-section-header" onclick="toggleSection(this)">
+                    <h3><span class="collapse-arrow">▼</span> ⭐ Whitelist</h3>
+                </div>
+                <div class="config-section-content">
+                    <h4>Whitelisted Processes</h4>
+                    <p>Add applications that should never be blocked</p>
+                    <div id="whitelistProcesses" class="keyword-list"></div>
+                    <div class="add-keyword">
+                        <input type="text" id="newWhitelistProcess" placeholder="Enter process name...">
+                        <button class="btn-primary" onclick="addWhitelistProcess()">+ Add Process</button>
+                    </div>
+
+                    <h4 style="margin-top: 20px;">Whitelisted Domains</h4>
+                    <p>Add domains or titles that should never be blocked (highest priority)</p>
+                    <div id="whitelistDomains" class="keyword-list"></div>
+                    <div class="add-keyword">
+                        <input type="text" id="newWhitelistDomain" placeholder="Enter domain or title...">
+                        <button class="btn-primary" onclick="addWhitelistDomain()">+ Add Domain</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settingsTab" class="tab-content">
+            <div class="config-section">
+                <div class="config-section-header" onclick="toggleSection(this)">
+                    <h3><span class="collapse-arrow">▼</span> ⚡ Active Monitoring</h3>
+                </div>
+                <div class="config-section-content">
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="activeEnabled">
+                                <label for="activeEnabled">Enable Active Monitoring</label>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="useMidnightCheckTime">
+                                <label for="useMidnightCheckTime">📋 Use Midnight Check times</label>
+                            </div>
+                            <small style="display: block; margin-top: 5px; color: #8892b0;">
+                                When enabled, Active Monitoring uses the same Start/End times from Midnight Check below
+                            </small>
+                        </div>
+                        
+                        <div class="setting-item" id="activeTimeSettings">
+                            <label>Start Time</label>
+                            <div class="time-picker-wrapper">
+                                <div class="time-picker">
+                                    <select id="activeStartHour" class="time-select"></select>
+                                    <span class="time-separator">:</span>
+                                    <select id="activeStartMinute" class="time-select"></select>
+                                </div>
+                                <span class="time-display" id="activeStartTimeDisplay">00:00 (Midnight)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item" id="activeEndTimeSettings">
+                            <label>End Time</label>
+                            <div class="time-picker-wrapper">
+                                <div class="time-picker">
+                                    <select id="activeEndHour" class="time-select"></select>
+                                    <span class="time-separator">:</span>
+                                    <select id="activeEndMinute" class="time-select"></select>
+                                </div>
+                                <span class="time-display" id="activeEndTimeDisplay">23:59 (11:59 PM)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <label>Check Interval (seconds)</label>
+                            <input type="number" id="checkInterval" min="1" max="60" value="7">
+                        </div>
+                        
+                        <div class="setting-item">
+                            <label>Warning Interval (seconds)</label>
+                            <input type="number" id="warningInterval" min="1" max="300" value="10">
+                        </div>
+                        
+                        <div class="setting-item">
+                            <label>Max Warnings Before Close</label>
+                            <input type="number" id="maxWarnings" min="1" max="10" value="3">
+                        </div>
+                    </div>
+                    <p style="margin-top: 15px; color: #a8b2d1; font-size: 14px;">
+                        ℹ️ Active monitoring watches your screen during the time period and blocks distracting apps/websites.
+                    </p>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <div class="config-section-header" onclick="toggleSection(this)">
+                    <h3><span class="collapse-arrow">▼</span> 🌙 Midnight Check</h3>
+                </div>
+                <div class="config-section-content">
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="midnightEnabled">
+                                <label for="midnightEnabled">Enable Midnight Check</label>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <label>Start Time (Begin monitoring period)</label>
+                            <div class="time-picker-wrapper">
+                                <div class="time-picker">
+                                    <select id="midnightStartHour" class="time-select"></select>
+                                    <span class="time-separator">:</span>
+                                    <select id="midnightStartMinute" class="time-select"></select>
+                                </div>
+                                <span class="time-display" id="midnightStartTimeDisplay">20:00 (8:00 PM)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <label>End Time (End monitoring / Shutdown time)</label>
+                            <div class="time-picker-wrapper">
+                                <div class="time-picker">
+                                    <select id="midnightEndHour" class="time-select"></select>
+                                    <span class="time-separator">:</span>
+                                    <select id="midnightEndMinute" class="time-select"></select>
+                                </div>
+                                <span class="time-display" id="midnightEndTimeDisplay">23:00 (11:00 PM)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="midnightShutdown">
+                                <label for="midnightShutdown">Enable System Shutdown at End Time</label>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-item">
+                            <label>Shutdown Countdown (seconds)</label>
+                            <input type="number" id="midnightCountdown" min="5" max="60" value="10">
+                        </div>
+                    </div>
+                    <p style="margin-top: 15px; color: #a8b2d1; font-size: 14px;">
+                        ℹ️ Example: Start 20:00, End 23:00 means monitoring period is 8 PM to 11 PM. At 11 PM, system can shutdown.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div id="logsTab" class="tab-content">
+            <div class="logs">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3>📊 Recent Activity</h3>
+                    <button class="btn-danger" onclick="clearLogs()">🗑️ Clear Logs</button>
+                </div>
+                <div id="logsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
