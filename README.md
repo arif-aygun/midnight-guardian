@@ -1,2 +1,2 @@
 # midnight-guardian
-Smart sleep enforcer for Windows that distinguishes work from play and protects your sleep schedule.
+Smart distraction blocker for Windows that helps you maintain healthy digital habits and protect your sleep schedule.
