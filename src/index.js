@@ -35,8 +35,13 @@ setInterval(() => {
 }, 5000);
 
 // Start the web UI
-startServer();
+// Scheduler job variable
+let midnightCheckJob = null;
+
+// Start the web UI with config change listener
+startServer(refreshScheduler);
 addLog('Midnight Guardian started', 'success');
+setupScheduler(); // Initial setup
 
 // Check if Do Not Disturb is enabled - REPLACE with simpler version
 async function isOverlayRequired() {
@@ -50,18 +55,18 @@ if ($toastEnabled -and $toastEnabled.ToastEnabled -eq 0) {
   Write-Output "disabled"
 }
     `;
-    
+
     const tempFile = path.join(os.tmpdir(), `mg-dnd-check-${Date.now()}.ps1`);
     fs.writeFileSync(tempFile, script, { encoding: 'utf8' });
-    
+
     exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tempFile}"`, (error, stdout) => {
       try {
         fs.unlinkSync(tempFile);
-      } catch (e) {}
-      
+      } catch (e) { }
+
       const result = stdout ? stdout.trim() : '';
       const overlayNeeded = result === 'enabled';
-      
+
       if (error) {
         resolve(false);
       } else {
@@ -77,25 +82,25 @@ function showOverlay(title, message, keepOpen = false) {
     updateOverlayMessage(title, message);
     return;
   }
-  
+
   hideOverlay();
-  
+
   // Escape special characters for PowerShell
   const escapedTitle = title.replace(/[\r\n]/g, ' ').replace(/["'`$]/g, '');
   const escapedMessage = message.replace(/[\r\n]/g, ' ').replace(/["'`$]/g, '');
-  
+
   const messageFile = path.join(os.tmpdir(), 'mg-overlay-message.txt');
   const closeFile = path.join(os.tmpdir(), 'mg-overlay-close.txt');
-  
+
   fs.writeFileSync(messageFile, `${escapedTitle}|${escapedMessage}`, { encoding: 'utf8' });
-  
+
   // Remove close signal file if it exists
   try {
     if (fs.existsSync(closeFile)) {
       fs.unlinkSync(closeFile);
     }
-  } catch (e) {}
-  
+  } catch (e) { }
+
   const script = `
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -197,10 +202,10 @@ $form.Add_FormClosed({
 [void]$form.ShowDialog()
 $form.Dispose()
   `.trim();
-  
+
   const tempFile = path.join(os.tmpdir(), `mg-overlay-${Date.now()}.ps1`);
   fs.writeFileSync(tempFile, script, { encoding: 'utf8' });
-  
+
   overlayProcess = spawn('powershell', [
     '-NoProfile',
     '-ExecutionPolicy', 'Bypass',
@@ -209,7 +214,7 @@ $form.Dispose()
     detached: false,
     stdio: 'ignore'
   });
-  
+
   overlayProcess.on('close', () => {
     try {
       fs.unlinkSync(tempFile);
@@ -221,7 +226,7 @@ $form.Dispose()
       if (fs.existsSync(closeSignal)) {
         fs.unlinkSync(closeSignal);
       }
-    } catch (e) {}
+    } catch (e) { }
     overlayProcess = null;
   });
 }
@@ -230,7 +235,7 @@ function updateOverlayMessage(title, message) {
   const messageFile = path.join(os.tmpdir(), 'mg-overlay-message.txt');
   const escapedTitle = title.replace(/[\r\n]/g, ' ').replace(/["'`$]/g, '');
   const escapedMessage = message.replace(/[\r\n]/g, ' ').replace(/["'`$]/g, '');
-  
+
   try {
     fs.writeFileSync(messageFile, `${escapedTitle}|${escapedMessage}`, { encoding: 'utf8' });
   } catch (e) {
@@ -243,16 +248,16 @@ function hideOverlay() {
     const closeFile = path.join(os.tmpdir(), 'mg-overlay-close.txt');
     try {
       fs.writeFileSync(closeFile, 'close', { encoding: 'utf8' });
-    } catch (e) {}
-    
+    } catch (e) { }
+
     setTimeout(() => {
       if (overlayProcess) {
-        exec(`taskkill /pid ${overlayProcess.pid} /T /F`, () => {});
+        exec(`taskkill /pid ${overlayProcess.pid} /T /F`, () => { });
         overlayProcess = null;
       }
     }, 500);
   }
-  
+
   const messageFile = path.join(os.tmpdir(), 'mg-overlay-message.txt');
   const closeFile = path.join(os.tmpdir(), 'mg-overlay-close.txt');
   try {
@@ -262,12 +267,12 @@ function hideOverlay() {
     if (fs.existsSync(closeFile)) {
       fs.unlinkSync(closeFile);
     }
-  } catch (e) {}
+  } catch (e) { }
 }
 
 function playSound(isUrgent = false) {
   const beepCount = isUrgent ? 5 : 2;
-  
+
   for (let i = 0; i < beepCount; i++) {
     setTimeout(() => {
       process.stdout.write('\x07');
@@ -277,7 +282,7 @@ function playSound(isUrgent = false) {
 
 async function monitorActiveWindow() {
   const currentConfig = getCurrentConfig();
-  
+
   if (!isMonitoringActive()) {
     return;
   }
@@ -297,7 +302,7 @@ async function monitorActiveWindow() {
 
   // Determine which times to use
   let startTime, endTime;
-  
+
   if (currentConfig.activeMonitoring.useMidnightCheckTime && currentConfig.midnightCheck.enabled) {
     // Use midnight check times
     startTime = currentConfig.midnightCheck.startTime;
@@ -312,16 +317,16 @@ async function monitorActiveWindow() {
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const currentTimeInMinutes = currentHour * 60 + currentMinute;
-  
+
   const [startHour, startMinute] = startTime.split(':').map(Number);
   const [endHour, endMinute] = endTime.split(':').map(Number);
-  
+
   const startTimeInMinutes = startHour * 60 + startMinute;
   const endTimeInMinutes = endHour * 60 + endMinute;
-  
+
   // Check if current time is within the monitoring window
   let isWithinWindow = false;
-  
+
   if (startTimeInMinutes <= endTimeInMinutes) {
     // Normal case: start < end (e.g., 08:00 - 23:00)
     isWithinWindow = currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
@@ -329,13 +334,13 @@ async function monitorActiveWindow() {
     // Crosses midnight (e.g., 22:00 - 02:00 OR 00:00 - 06:00)
     isWithinWindow = currentTimeInMinutes >= startTimeInMinutes || currentTimeInMinutes < endTimeInMinutes;
   }
-  
+
   if (!isWithinWindow) {
     if (lastLoggedState !== 'outside-window') {
       const source = currentConfig.activeMonitoring.useMidnightCheckTime ? 'Midnight Check' : 'Active Monitoring';
       addLog(`⏰ Outside monitoring window (${startTime} - ${endTime} from ${source}) - Current time: ${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`, 'info');
       lastLoggedState = 'outside-window';
-      
+
       // Hide overlay if any
       hideOverlay();
       currentBlockedApp = null;
@@ -359,10 +364,10 @@ async function monitorActiveWindow() {
     const windowTitle = window.title.toLowerCase();
     const executableName = processPath ? path.basename(processPath) : processName;
 
-    const isWhitelisted = 
+    const isWhitelisted =
       currentConfig.whitelist.domains.some(d => windowTitle.includes(d.toLowerCase())) ||
-      currentConfig.whitelist.processes.some(p => 
-        processName.includes(p.toLowerCase()) || 
+      currentConfig.whitelist.processes.some(p =>
+        processName.includes(p.toLowerCase()) ||
         executableName.includes(p.toLowerCase())
       );
 
@@ -381,7 +386,7 @@ async function monitorActiveWindow() {
       return;
     }
 
-    const hasAllowKeyword = currentConfig.allowKeywords.some(k => 
+    const hasAllowKeyword = currentConfig.allowKeywords.some(k =>
       windowTitle.includes(k.toLowerCase())
     );
 
@@ -400,16 +405,16 @@ async function monitorActiveWindow() {
       return;
     }
 
-    const isBlocklisted = 
-      currentConfig.blocklist.processes.some(p => 
-        processName.includes(p.toLowerCase()) || 
+    const isBlocklisted =
+      currentConfig.blocklist.processes.some(p =>
+        processName.includes(p.toLowerCase()) ||
         executableName.includes(p.toLowerCase())
       ) ||
-      currentConfig.blocklist.domains.some(d => 
+      currentConfig.blocklist.domains.some(d =>
         windowTitle.includes(d.toLowerCase())
       );
 
-    const matchedBlockKeyword = currentConfig.blockKeywords.find(k => 
+    const matchedBlockKeyword = currentConfig.blockKeywords.find(k =>
       windowTitle.includes(k.toLowerCase())
     );
 
@@ -441,9 +446,9 @@ function handleBlockedApp(processName, executableName, windowTitle, reason, curr
   const now = Date.now();
   const maxWarnings = currentConfig.activeMonitoring.autoCloseAfterWarnings;
   const displayName = processName || executableName;
-  
+
   const appKey = `${executableName}`;
-  
+
   if (!blockedAppHistory[appKey]) {
     blockedAppHistory[appKey] = {
       warningCount: 0,
@@ -452,24 +457,24 @@ function handleBlockedApp(processName, executableName, windowTitle, reason, curr
       countdownActive: false
     };
   }
-  
+
   const appHistory = blockedAppHistory[appKey];
   const wasBlocked = currentBlockedApp === displayName;
-  
+
   const timeSinceLastWarning = (now - appHistory.lastWarningTime) / 1000;
   const shouldWarn = timeSinceLastWarning >= currentConfig.activeMonitoring.warningIntervalSeconds;
-  
+
   currentBlockedApp = displayName;
   currentBlockedProcess = executableName;
   warningCount = appHistory.warningCount;
   lastWarningTime = appHistory.lastWarningTime;
-  
+
   if (appHistory.warningCount === 0) {
     warningCount = 1;
     appHistory.warningCount = 1;
     appHistory.lastWarningTime = now;
     lastWarningTime = now;
-    
+
     const message = `${displayName} is blocked!\n\nReason: ${reason}\nTitle: "${windowTitle}"\n\nWarning ${warningCount} of ${maxWarnings}`;
     addLog(`🚫 Blocked ${displayName} (${reason}) - Warning 1/${maxWarnings}`, 'warning');
     showNotificationBasedOnDND('Midnight Guardian', message);
@@ -484,27 +489,31 @@ function handleBlockedApp(processName, executableName, windowTitle, reason, curr
     appHistory.warningCount = warningCount;
     appHistory.lastWarningTime = now;
     lastWarningTime = now;
-    
+
     const isLastWarning = warningCount >= maxWarnings;
-    
+
     if (isLastWarning) {
       appHistory.countdownActive = true;
       const countdownSeconds = 10;
       let remainingSeconds = countdownSeconds;
-      
+
       const message = `FINAL WARNING!\n\nClose ${displayName} NOW or it will be force-closed in ${remainingSeconds} seconds!`;
       addLog(`🚨 FINAL WARNING: ${displayName} will be closed in ${countdownSeconds}s`, 'warning');
       showOverlay('FINAL WARNING', message, true);
-      
+
       const countdownInterval = setInterval(() => {
         remainingSeconds--;
-        
+
         if (remainingSeconds <= 0) {
           clearInterval(countdownInterval);
-          addLog(`🔨 Force-closed ${displayName}`, 'warning');
-          forceCloseApp(executableName);
+          if (currentConfig.dryRun) {
+            addLog(`✅ [DRY RUN] Would have closed ${displayName}`, 'success');
+          } else {
+            addLog(`🔨 Force-closed ${displayName}`, 'warning');
+            forceCloseApp(executableName);
+          }
           hideOverlay();
-          
+
           delete blockedAppHistory[appKey];
           currentBlockedApp = null;
           currentBlockedProcess = null;
@@ -515,7 +524,7 @@ function handleBlockedApp(processName, executableName, windowTitle, reason, curr
           updateOverlayMessage('FINAL WARNING', countdownMessage);
         }
       }, 1000);
-      
+
       lastLoggedState = 'countdown';
     } else {
       const message = `Still using ${displayName}!\n\nWarning ${warningCount} of ${maxWarnings}\n\nSwitch to another app or it will be force-closed.`;
@@ -528,7 +537,7 @@ function handleBlockedApp(processName, executableName, windowTitle, reason, curr
 
 async function showNotificationBasedOnDND(title, message) {
   const overlayNeeded = await isOverlayRequired();
-  
+
   if (overlayNeeded) {
     addLog('Notifications disabled - showing overlay', 'info');
     showOverlay(title, message, false);
@@ -543,16 +552,22 @@ async function showNotificationBasedOnDND(title, message) {
       type: 'warn',
       urgency: 'normal'
     });
-    
+
     playSound(false);
   }
 }
 
 function forceCloseApp(executableName) {
+  const currentConfig = getCurrentConfig();
+  if (currentConfig.dryRun) {
+    addLog(`🚫 [DRY RUN] Would have closed process: ${executableName}`, 'info');
+    return;
+  }
+
   exec(`taskkill /IM "${executableName}" /F`, (error) => {
     if (error) {
       addLog(`❌ Failed to close ${executableName}`, 'error');
-      
+
       const nameWithoutExt = executableName.replace(/\.exe$/i, '');
       exec(`taskkill /IM "${nameWithoutExt}.exe" /F`, (error2) => {
         if (!error2) {
@@ -565,44 +580,66 @@ function forceCloseApp(executableName) {
   });
 }
 
-function setupMidnightCheck() {
-  const currentConfig = getCurrentConfig();
-  
-  if (currentConfig.midnightCheck.enabled) {
-    const startTime = currentConfig.midnightCheck.startTime;
-    const endTime = currentConfig.midnightCheck.endTime;
+
+function setupScheduler() {
+  refreshScheduler(getCurrentConfig());
+}
+
+function refreshScheduler(config) {
+  if (midnightCheckJob) {
+    midnightCheckJob.cancel();
+    midnightCheckJob = null;
+  }
+
+  if (config.midnightCheck.enabled) {
+    const startTime = config.midnightCheck.startTime;
+    const endTime = config.midnightCheck.endTime;
     const [startHour, startMinute] = startTime.split(':').map(Number);
     const [endHour, endMinute] = endTime.split(':').map(Number);
-    
-    addLog(`🌙 Midnight check scheduled: ${startTime} - ${endTime}`, 'info');
-    
+
     // Schedule for end time (shutdown time)
-    schedule.scheduleJob({ hour: endHour, minute: endMinute }, () => {
+    midnightCheckJob = schedule.scheduleJob({ hour: endHour, minute: endMinute }, () => {
+      // Re-read config to ensure we have the absolute latest active state (e.g. if dryRun changed)
+      const freshConfig = getCurrentConfig();
       addLog('🌙 Midnight check END time reached', 'info');
-      
-      if (currentConfig.midnightCheck.enableShutdown) {
-        let countdown = currentConfig.midnightCheck.countdownSeconds;
+
+      if (freshConfig.midnightCheck.enableShutdown) {
+        let countdown = freshConfig.midnightCheck.countdownSeconds;
         addLog(`⏰ System shutdown in ${countdown}s`, 'warning');
-        
+
         const countdownInterval = setInterval(() => {
           countdown--;
           if (countdown <= 0) {
             clearInterval(countdownInterval);
-            addLog('💤 Shutting down system', 'warning');
-            exec('shutdown /s /t 0');
+            if (freshConfig.dryRun) {
+              addLog('💤 [DRY RUN] System would shut down now', 'success');
+            } else {
+              addLog('💤 Shutting down system', 'warning');
+              exec('shutdown /s /t 0');
+            }
           } else if (countdown % 10 === 0 && countdown <= 30) {
             addLog(`⏰ Shutdown in ${countdown}s`, 'warning');
           }
         }, 1000);
       }
     });
+
+    addLog(`🌙 Midnight check scheduled for ${endTime}`, 'info');
+  } else {
+    addLog('🌙 Midnight check disabled', 'info');
   }
 }
 
-setupMidnightCheck();
+// Replaces the setInterval loop with a recursive function
+async function outputLoop() {
+  const config = getCurrentConfig();
 
-const currentConfig = getCurrentConfig();
-setInterval(monitorActiveWindow, currentConfig.activeMonitoring.checkIntervalSeconds * 1000);
+  await monitorActiveWindow();
+
+  setTimeout(outputLoop, config.activeMonitoring.checkIntervalSeconds * 1000);
+}
+
+outputLoop();
 
 addLog('✨ Active monitoring enabled', 'info');
 console.log('Midnight Guardian is now monitoring...');

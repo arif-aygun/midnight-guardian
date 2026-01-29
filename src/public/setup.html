@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Midnight Guardian - Setup</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+        }
+
+        .wizard-container {
+            width: 100%;
+            max-width: 600px;
+            height: 500px;
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .wizard-header {
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .wizard-header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #f8fafc;
+        }
+
+        .wizard-content {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .step {
+            display: none;
+            width: 100%;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        .wizard-footer {
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .nav-btn {
+            padding: 10px 24px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-back {
+            background: transparent;
+            color: #94a3b8;
+        }
+
+        .btn-back:hover {
+            color: #f8fafc;
+        }
+
+        .btn-next {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white;
+        }
+
+        .btn-next:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .step-indicator {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .dot.active {
+            background: #a855f7;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Specific Inputs */
+        .time-input-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        .time-select {
+            background: #334155;
+            color: white;
+            border: 1px solid #475569;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wizard-container">
+        <div class="wizard-header">
+            <div class="step-indicator">
+                <div class="dot active"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+            <h1>Midnight Guardian Setup</h1>
+        </div>
+
+        <div class="wizard-content">
+            <!-- Step 1: Welcome -->
+            <div class="step active" id="step1">
+                <span class="feature-icon">👋</span>
+                <h2>Welcome aboard!</h2>
+                <p>Midnight Guardian helps you reclaim your sleep and focus by managing your digital habits.</p>
+                <p>Let's get you set up in just a few clicks.</p>
+            </div>
+
+            <!-- Step 2: Permissions -->
+            <div class="step" id="step2">
+                <span class="feature-icon">🚀</span>
+                <h2>Stay Protected</h2>
+                <p>To ensure Midnight Guardian can protect your schedule every day, we highly recommend allowing it to
+                    start automatically.</p>
+                <div class="setting-item" style="justify-content: center; margin-top: 20px;">
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="runOnStartup" checked>
+                        <label for="runOnStartup">Run on System Startup</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Bedtime -->
+            <div class="step" id="step3">
+                <span class="feature-icon">🌙</span>
+                <h2>When is Bedtime?</h2>
+                <p>We'll set up your primary "Midnight Check" hours. During this time, the guardian is most vigilant.
+                </p>
+
+                <div class="time-input-group">
+                    <div>
+                        <label style="display:block; margin-bottom:5px; font-size:12px; color:#94a3b8;">Start
+                            Time</label>
+                        <select id="startHour" class="time-select"></select> :
+                        <select id="startMinute" class="time-select"></select>
+                    </div>
+                    <div style="display:flex; align-items:flex-end; padding-bottom:8px;">➜</div>
+                    <div>
+                        <label style="display:block; margin-bottom:5px; font-size:12px; color:#94a3b8;">End Time</label>
+                        <select id="endHour" class="time-select"></select> :
+                        <select id="endMinute" class="time-select"></select>
+                    </div>
+                </div>
+                <p style="font-size: 13px; color: #94a3b8;">You can customize strictness later.</p>
+            </div>
+
+            <!-- Step 4: Finish -->
+            <div class="step" id="step4">
+                <span class="feature-icon">✨</span>
+                <h2>You're All Set!</h2>
+                <p>You can verify app status from the System Tray icon.</p>
+                <p>Click "Finish" to open your Dashboard.</p>
+            </div>
+        </div>
+
+        <div class="wizard-footer">
+            <button class="nav-btn btn-back" id="backBtn" style="visibility: hidden;">Back</button>
+            <button class="nav-btn btn-next" id="nextBtn">Next</button>
+        </div>
+    </div>
+
+    <script src="setup.js"></script>
+</body>
+
+</html>
