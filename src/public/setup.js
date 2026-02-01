@@ -13,9 +13,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('nextBtn').addEventListener('click', nextStep);
     document.getElementById('backBtn').addEventListener('click', prevStep);
 
-    // Set initial values
-    if (config.midnightCheck) {
-        setTimeInputs(config.midnightCheck.startTime, config.midnightCheck.endTime);
+    // Set initial values from activeMonitoring
+    if (config.activeMonitoring) {
+        setTimeInputs(config.activeMonitoring.startTime, config.activeMonitoring.endTime);
     }
 });
 
@@ -72,17 +72,11 @@ async function finishSetup() {
     // Update Config
     config.runOnStartup = runOnStartup;
 
-    if (!config.midnightCheck) config.midnightCheck = {};
-    config.midnightCheck.enabled = true; // Enable by default on setup
-    config.midnightCheck.startTime = `${startHour}:${startMinute}`;
-    config.midnightCheck.endTime = `${endHour}:${endMinute}`;
-
-    // Sync active monitoring if it's default
+    // Set active monitoring time window
     if (!config.activeMonitoring) config.activeMonitoring = {};
+    config.activeMonitoring.enabled = true; // Enable by default on setup
     config.activeMonitoring.startTime = `${startHour}:${startMinute}`;
     config.activeMonitoring.endTime = `${endHour}:${endMinute}`;
-    config.activeMonitoring.useMidnightCheckTime = true;
-    config.activeMonitoring.enabled = true; // Enable basic monitoring by default
 
     // Save
     await window.electronAPI.saveConfig(config);

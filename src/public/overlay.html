@@ -14,118 +14,94 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            background: rgba(0, 0, 0, 0.7);
-            /* Dim the background */
-            backdrop-filter: blur(8px);
-            /* Blur effect */
+            background: rgba(0, 0, 0, 0.85);
+            /* Dim background */
             font-family: 'Segoe UI', system-ui, sans-serif;
-            color: #e6f1ff;
-            user-select: none;
+            color: white;
             overflow: hidden;
+            user-select: none;
         }
 
         .container {
-            background: linear-gradient(135deg, rgba(23, 32, 56, 0.95), rgba(16, 22, 40, 0.98));
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5),
-                0 0 0 1px rgba(100, 255, 218, 0.2);
             text-align: center;
+            background: #1e1e24;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
             max-width: 500px;
             width: 90%;
             animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            border-top: 4px solid #f59e0b;
-            /* Warning color default */
         }
 
         .container.urgent {
-            border-top-color: #ef4444;
-            /* Urgent color */
-            animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+            border-color: #ff4757;
+            background: #2d1b1b;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         .icon {
             font-size: 64px;
             margin-bottom: 20px;
             display: block;
-            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         }
 
         h1 {
-            margin: 0 0 15px 0;
-            font-size: 28px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
+            margin: 0 0 10px;
+            font-size: 24px;
+            color: #fff;
         }
 
         p {
-            font-size: 18px;
+            margin: 0 0 30px;
             line-height: 1.6;
-            color: #a8b2d1;
-            margin-bottom: 30px;
-            white-space: pre-wrap;
-            /* Allow newlines */
+            color: #aaa;
         }
 
         button {
-            background: linear-gradient(135deg, #64ffda 0%, #00b894 100%);
-            color: #0f1419;
+            background: #3296fa;
+            color: white;
             border: none;
-            padding: 12px 32px;
+            padding: 12px 30px;
             font-size: 16px;
-            font-weight: 700;
             border-radius: 8px;
             cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 15px rgba(100, 255, 218, 0.3);
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            transition: transform 0.1s;
         }
 
         button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(100, 255, 218, 0.4);
+            transform: scale(1.05);
+            background: #1e80e0;
         }
 
-        button:active {
-            transform: translateY(1px);
-        }
-
-        /* Animations */
-        @keyframes popIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9) translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1) translateY(0);
-            }
-        }
-
-        @keyframes shake {
-
-            10%,
-            90% {
-                transform: translate3d(-1px, 0, 0);
-            }
-
-            20%,
-            80% {
-                transform: translate3d(2px, 0, 0);
-            }
-
-            30%,
-            50%,
-            70% {
-                transform: translate3d(-4px, 0, 0);
-            }
-
-            40%,
-            60% {
-                transform: translate3d(4px, 0, 0);
-            }
+        /* Minimalist Monitor Mode */
+        #shutdownTimer {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff4757;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            z-index: 10000;
+            cursor: default;
+            pointer-events: auto;
+            /* Capture mouse on timer */
         }
     </style>
 </head>
@@ -138,31 +114,80 @@
         <button id="okBtn">I Understand</button>
     </div>
 
+    <!-- Shutdown Timer (Minimalist) -->
+    <div id="shutdownTimer">
+        ⏱️ <span id="timerValue">60</span>s
+    </div>
+
     <script>
+        // Use electronAPI exposed by preload (secure with contextIsolation)
         const container = document.getElementById('container');
         const iconEl = document.getElementById('icon');
         const titleEl = document.getElementById('title');
         const messageEl = document.getElementById('message');
         const okBtn = document.getElementById('okBtn');
+        const timerEl = document.getElementById('shutdownTimer');
 
-        // Logic handled via IPC
-        window.electronAPI.onUpdateOverlay((data) => {
-            titleEl.textContent = data.title;
-            messageEl.textContent = data.message;
-
-            if (data.isUrgent) {
-                container.classList.add('urgent');
-                iconEl.textContent = '🛑';
-                okBtn.textContent = 'Closing Soon...';
-            } else {
-                container.classList.remove('urgent');
-                iconEl.textContent = '⚠️';
-                okBtn.textContent = 'I Understand';
+        // Mouse Event Forwarding Logic
+        timerEl.addEventListener('mouseenter', () => {
+            // When hovering timer, capture events
+            if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                window.electronAPI.setIgnoreMouseEvents(false);
             }
         });
 
+        timerEl.addEventListener('mouseleave', () => {
+            // If we are in "timer-only" mode (container hidden), forward events (ignore mouse)
+            if (container.style.display === 'none') {
+                if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                    window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+                }
+            }
+        });
+
+        // Listen for overlay updates
+        if (window.electronAPI && window.electronAPI.onUpdateOverlay) {
+            window.electronAPI.onUpdateOverlay((data) => {
+                // Mode Handling
+                if (data.mode === 'timer-only') {
+                    container.style.display = 'none'; // Hide main warning
+                    timerEl.style.display = 'flex';   // Flex for the new layout
+                    document.getElementById('timerValue').textContent = String(data.timerSeconds || '0');
+
+                    // Enable click-through on body, but timer captures
+                    if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                        window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+                    }
+                } else {
+                    // Blocking Mode
+                    container.style.display = 'block';
+                    timerEl.style.display = 'none';
+
+                    // SECURITY: Use textContent (not innerHTML) to prevent XSS from malicious process names
+                    titleEl.textContent = data.title;   // Auto-escapes HTML
+                    messageEl.textContent = data.message; // Auto-escapes HTML
+
+                    if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                        window.electronAPI.setIgnoreMouseEvents(false); // Capture clicks
+                    }
+                }
+
+                if (data.isUrgent) {
+                    container.classList.add('urgent');
+                    iconEl.textContent = '🛑';
+                    okBtn.textContent = 'Closing Soon...';
+                } else {
+                    container.classList.remove('urgent');
+                    iconEl.textContent = '⚠️';
+                    okBtn.textContent = 'I Understand';
+                }
+            });
+        }
+
         okBtn.addEventListener('click', () => {
-            window.electronAPI.hideOverlay();
+            if (window.electronAPI && window.electronAPI.hideOverlay) {
+                window.electronAPI.hideOverlay();
+            }
         });
     </script>
 </body>

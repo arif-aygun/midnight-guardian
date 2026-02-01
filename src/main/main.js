@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, shell, screen } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 const { setupMonitor, stopMonitor } = require('./monitor');
@@ -15,12 +15,13 @@ const ICON_PATH = path.join(ASSETS_PATH, 'icon.png'); // Need to ensure this exi
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 400, // Compact width
-        height: 600,
+        height: 700,
         show: false,
         frame: false, // Frameless
         fullscreenable: false,
         resizable: false,
         skipTaskbar: true, // Hide from taskbar
+        alwaysOnTop: true, // Keep on top of other windows
         backgroundColor: '#1a1a2e',
         webPreferences: {
             preload: path.join(__dirname, '..', 'preload.js'),
@@ -30,12 +31,12 @@ function createWindow() {
         }
     });
 
-    // Hide when losing focus (blur)
-    mainWindow.on('blur', () => {
-        if (!mainWindow.webContents.isDevToolsOpened()) {
-            mainWindow.hide();
-        }
-    });
+    // Hide when losing focus (blur) - DISABLED per user request
+    // mainWindow.on('blur', () => {
+    //     if (!mainWindow.webContents.isDevToolsOpened()) {
+    //         mainWindow.hide();
+    //     }
+    // });
 
     // Check first run
     const config = getStore();
@@ -44,7 +45,7 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', 'public', targetPage));
 
     mainWindow.once('ready-to-show', () => {
-        mainWindow.show();
+        showWindow();
     });
 
     // Close to Tray logic
@@ -64,7 +65,7 @@ function createWindow() {
     });
 }
 
-const { screen } = require('electron'); // Needs to be added to top imports if not there
+
 
 function toggleWindow() {
     if (mainWindow.isVisible()) {
@@ -75,34 +76,14 @@ function toggleWindow() {
 }
 
 function showWindow() {
-    // Get tray position
-    const trayBounds = tray.getBounds();
     const windowBounds = mainWindow.getBounds();
-
-    // Position window vertically above the tray icon
-    let x, y;
-
-    // Calculate position - simple bottom right logic for now
-    // Ideally we check where the taskbar is, but assuming bottom right taskbar:
     const primaryDisplay = screen.getPrimaryDisplay();
-    const { width, height } = primaryDisplay.workAreaSize;
-
-    // Default to bottom right alignment
-    // Center horizontally relative to tray icon
-    x = Math.round(trayBounds.x + (trayBounds.width / 2) - (windowBounds.width / 2));
-
-    // Position vertically
-    // If tray is at the bottom
-    if (trayBounds.y > height / 2) {
-        y = Math.round(trayBounds.y - windowBounds.height - 10);
-    } else {
-        // Tray is at top
-        y = Math.round(trayBounds.y + trayBounds.height + 10);
-    }
-
-    // Ensure inside screen bounds
-    // ... basic clamping if needed
-
+    // Use workArea to respect taskbar position
+    const { x: workX, y: workY, width: workWidth, height: workHeight } = primaryDisplay.workArea;
+    // Fixed Bottom Right Positioning (12px padding from edges)
+    const padding = 12;
+    const x = Math.round(workX + workWidth - windowBounds.width - padding);
+    const y = Math.round(workY + workHeight - windowBounds.height - padding);
     mainWindow.setPosition(x, y, false);
     mainWindow.show();
     mainWindow.focus();
@@ -144,8 +125,7 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
-    // Initialize Store
-    // TODO: Implement store initialization
+    // Store auto-initializes on first getStore() call
 
     createWindow();
     createTray();
@@ -194,6 +174,28 @@ ipcMain.handle('save-config', async (event, newConfig) => {
 
 ipcMain.on('minimize-to-tray', () => {
     if (mainWindow) mainWindow.hide();
+});
+
+ipcMain.on('quit-app', () => {
+    const config = getStore();
+    if (config.strictMode) {
+        // Strict Mode Enabled: Prevent Quit
+        // Verify if we are also in active hours? User said "Prevent quitting".
+        // Strict Mode usually implies "No Escape" regardless of time, or only during active time?
+        // Let's assume global switch for now as per UI button.
+        // We should warn the user.
+        const { dialog } = require('electron');
+        dialog.showMessageBox(mainWindow, {
+            type: 'warning',
+            title: 'Strict Mode Active',
+            message: 'You cannot close the application while Strict Mode is enabled.\n\nDisable Strict Mode in the dashboard first.',
+            buttons: ['OK']
+        });
+        return;
+    }
+
+    isQuitting = true;
+    app.quit();
 });
 
 // Handle generic logs from monitor and send to renderer

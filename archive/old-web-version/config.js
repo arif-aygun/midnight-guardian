@@ -7,15 +7,14 @@ module.exports = {
     "checkIntervalSeconds": 2,
     "warningIntervalSeconds": 30,
     "autoCloseAfterWarnings": 3,
-    "useMidnightCheckTime": false
+    "shutdownAtEnd": false
   },
-  "midnightCheck": {
-    "enabled": true,
-    "startTime": "00:00",
-    "endTime": "06:00",
-    "enableShutdown": false,
-    "countdownSeconds": 10
+  "scheduledShutdown": {
+    "enabled": false,
+    "time": "23:00"
   },
+
+  "strictMode": false,
   "blockKeywords": [
     "youtube",
     "facebook",
@@ -61,7 +60,9 @@ module.exports = {
       "devenv.exe",
       "idea64.exe",
       "sublime_text.exe",
-      "notion.exe"
+      "notion.exe",
+      "electron.exe",
+      "midnight-guardian.exe"
     ],
     "domains": [
       "github.com",

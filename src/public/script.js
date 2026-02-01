@@ -16,6 +16,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Optional: Update specific UI if overlay changes state
   });
 
+  window.electronAPI.onLogUpdate((log) => {
+    const logsList = document.getElementById('logsList');
+    if (logsList) {
+      const entry = document.createElement('div');
+      const time = new Date(log.timestamp).toLocaleTimeString();
+      entry.style.marginBottom = '4px';
+      entry.style.borderBottom = '1px solid #333';
+      entry.innerHTML = `<span style="color:#666">[${time}]</span> ${log.message}`;
+      logsList.prepend(entry);
+    }
+  });
+
   populateTimeSelects();
   setupHoverEvents();
 });
@@ -23,35 +35,25 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupHoverEvents() {
   // Active Mode
   const activeData = {
-    'btn-active-off': 'Disables all monitoring logic',
-    'btn-active-on': 'Blocks distractors during scheduled hours',
-    'strict': 'Prevents quitting or bypassing blocks' // Special case for strict
+    'btn-off': 'Disables all monitoring logic',
+    'btn-active': 'Blocks distractors during scheduled hours',
+    'btn-strict': 'Prevents quitting and enforces blocks',
+    'shutdownAtEnd': 'Forces PC shutdown when focus time ends'
   };
 
-  // Bind Active
   Object.keys(activeData).forEach(id => {
-    let btn;
-    if (id === 'strict') btn = document.querySelector('.mode-btn[onclick="toggleStrict()"]');
-    else btn = document.getElementById(id);
-
-    if (btn) {
-      btn.addEventListener('mouseenter', () => document.getElementById('active-desc').textContent = activeData[id]);
-      btn.addEventListener('mouseleave', () => document.getElementById('active-desc').textContent = 'Select a mode to see details');
-    }
-  });
-
-  // Midnight Mode
-  const midnightData = {
-    'btn-midnight-off': 'No action taken during sleep hours',
-    'btn-midnight-on': 'Dims screen and warns if awake late',
-    'btn-midnight-shutdown': 'Forces PC shutdown at end time'
-  };
-
-  Object.keys(midnightData).forEach(id => {
     const btn = document.getElementById(id);
+    // Bind to description. If btn is checkbox/parent, bind accordingly?
+    // Using previous pattern:
     if (btn) {
-      btn.addEventListener('mouseenter', () => document.getElementById('midnight-desc').textContent = midnightData[id]);
-      btn.addEventListener('mouseleave', () => document.getElementById('midnight-desc').textContent = 'Select a mode to see details');
+      btn.addEventListener('mouseenter', () => {
+        if (document.getElementById('active-desc'))
+          document.getElementById('active-desc').textContent = activeData[id];
+      });
+      btn.addEventListener('mouseleave', () => {
+        if (document.getElementById('active-desc'))
+          document.getElementById('active-desc').textContent = 'Select a mode to see details';
+      });
     }
   });
 }
@@ -67,44 +69,61 @@ async function loadConfig() {
 }
 
 // Render Logic
+// Render Logic
 function renderUI() {
   // Active Monitoring State
   const activeEnabled = config.activeMonitoring?.enabled || false;
-  updateButtonState('btn-active-off', !activeEnabled);
-  updateButtonState('btn-active-on', activeEnabled);
-
   // Strict Mode State
   const strictEnabled = config.strictMode || false;
-  const strictIcon = document.getElementById('strict-icon');
-  const strictText = document.getElementById('strict-text');
-  if (strictEnabled) {
-    document.querySelector('.mode-btn[onclick="toggleStrict()"]')?.classList.add('active');
-    if (strictIcon) strictIcon.textContent = '🔒';
-    if (strictText) strictText.textContent = 'Strict';
-  } else {
-    document.querySelector('.mode-btn[onclick="toggleStrict()"]')?.classList.remove('active');
-    if (strictIcon) strictIcon.textContent = '🔓';
-    if (strictText) strictText.textContent = 'Strict';
-  }
 
-  // Midnight Check State
-  const midnightEnabled = config.midnightCheck?.enabled || false;
-  const shutdownEnabled = config.midnightCheck?.enableShutdown || false;
-
-  updateButtonState('btn-midnight-off', !midnightEnabled);
-  updateButtonState('btn-midnight-on', midnightEnabled && !shutdownEnabled);
-  updateButtonState('btn-midnight-shutdown', midnightEnabled && shutdownEnabled);
+  // Button States: Off, Active, Strict
+  updateButtonState('btn-off', !activeEnabled);
+  updateButtonState('btn-active', activeEnabled && !strictEnabled);
+  updateButtonState('btn-strict', activeEnabled && strictEnabled);
 
   // Configs
-  document.getElementById('runOnStartup').checked = config.runOnStartup || false;
+  if (document.getElementById('runOnStartup')) {
+    document.getElementById('runOnStartup').checked = config.runOnStartup || false;
+  }
+
+  if (document.getElementById('shutdownAtEnd')) {
+    document.getElementById('shutdownAtEnd').checked = config.activeMonitoring?.shutdownAtEnd || false;
+  }
+
 
   // Schedules
   updateTimeDisplay('active', config.activeMonitoring);
-  updateTimeDisplay('midnight', config.midnightCheck);
+
+  // Scheduled Shutdown
+  if (config.scheduledShutdown) {
+    const sEnabled = document.getElementById('shutdownEnabled');
+    const sTimeDisplay = document.getElementById('shutdownTimeDisplay');
+
+    if (sEnabled) sEnabled.checked = config.scheduledShutdown.enabled || false;
+
+    if (sTimeDisplay) {
+      // Format time to 12h AM/PM
+      const rawTime = config.scheduledShutdown.time || '23:00';
+      const [h, m] = rawTime.split(':');
+      const d = new Date();
+      d.setHours(h);
+      d.setMinutes(m);
+      const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      sTimeDisplay.textContent = timeStr;
+    }
+  }
 
   // Chips
   renderChips('blockChips', config.blockKeywords, 'block');
-  renderChips('allowChips', config.allowKeywords, 'allow');
+  // Removed allowChips rendering if UI element is gone, or keep if UI still exists? 
+  // UI for Allowed Chips was removed in previous steps? Wait, I didn't verify that fully.
+  // The 'Sections' replacement in index.html replaced everything from Active to Rules.
+  // Wait, I replaced 'Section: Sleep Guardian' but kept 'Section: Rules & Whitelist'.
+  // Let's assume 'allowChips' container might still be there if I didn't delete it.
+  // I will check if 'allowChips' exists before rendering.
+  if (document.getElementById('allowChips')) {
+    renderChips('allowChips', config.allowKeywords, 'allow');
+  }
 
   // Stats (Mock for now)
   if (document.getElementById('stat-blocks')) document.getElementById('stat-blocks').textContent = config.stats?.blocksBlocked || 0;
@@ -143,30 +162,72 @@ function renderChips(containerId, items, type) {
 
 // Logic Actions
 
+// Logic Actions
+
 function toggleStrict() {
   config.strictMode = !config.strictMode;
   saveConfig();
 }
 
-function setActiveMode(enabled) {
+function setActiveMode(enabled, shutdown) {
   if (!config.activeMonitoring) config.activeMonitoring = {};
   config.activeMonitoring.enabled = enabled;
-  saveConfig();
-}
+  // If 'Strict' button clicked (enable=true, shutdown=true), set strictMode
+  // logic map: 
+  // Off: enabled=false
+  // Active: enabled=true, strict=false
+  // Strict: enabled=true, strict=true
 
-function setMidnightMode(enabled, shutdown) {
-  if (!config.midnightCheck) config.midnightCheck = {};
-  config.midnightCheck.enabled = enabled;
-  config.midnightCheck.enableShutdown = shutdown;
+  // Wait, strictMode is a separate top-level config?
+  // Previous code had toggleStrict(). 
+  // New UI has 3 buttons: Off, Active, Strict.
+  // Let's map them:
+
+  if (shutdown) {
+    // This param name 'shutdown' in the HTML onclick for Strict is confusing, 
+    // let's assume it means 'isStrict' based on the "Strict" label.
+    config.strictMode = true;
+  } else {
+    if (enabled) config.strictMode = false;
+    // if disabled (Off), strictly speaking strictMode doesn't matter, but let's leave it.
+  }
+
   saveConfig();
 }
 
 async function saveConfig() {
-  // Config items that aren't mode buttons (like startup)
-  config.runOnStartup = document.getElementById('runOnStartup').checked;
+  try {
+    // Config items
+    const runOnStartupEl = document.getElementById('runOnStartup');
+    if (runOnStartupEl) config.runOnStartup = runOnStartupEl.checked;
 
-  await window.electronAPI.saveConfig(config);
-  renderUI(); // Re-render to show active states
+    if (config.activeMonitoring) {
+      const shutdownAtEndEl = document.getElementById('shutdownAtEnd');
+      if (shutdownAtEndEl) config.activeMonitoring.shutdownAtEnd = shutdownAtEndEl.checked;
+    }
+
+    // Scheduled Shutdown
+    if (!config.scheduledShutdown) config.scheduledShutdown = {};
+    const sEnabled = document.getElementById('shutdownEnabled');
+    const sTime = document.getElementById('shutdownTime');
+    if (sEnabled) config.scheduledShutdown.enabled = sEnabled.checked;
+    if (sTime) config.scheduledShutdown.time = sTime.value;
+
+    await window.electronAPI.saveConfig(config);
+
+    // Visual feedback
+    const saveBtn = document.querySelector('button[onclick="saveConfig()"] span');
+    if (saveBtn) {
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = '✅ Saved';
+      setTimeout(() => saveBtn.textContent = originalText, 1500);
+    }
+
+    renderUI();
+  } catch (error) {
+    console.error('Save failed:', error);
+    alert('Failed to save settings: ' + error.message);
+  }
 }
 
 // Keyword Logic
@@ -180,13 +241,9 @@ function openKeywordModal(type) {
 function saveKeywordModal() {
   const val = document.getElementById('modalKeywordInput').value.trim();
   if (val) {
-    // We only have one keyword section now (Blocked) based on UI, 
-    // but let's keep logic flexible if we add Allowed back
     const targetList = currentModalType === 'block' ? 'blockKeywords' : 'allowKeywords';
-
     if (!config[targetList]) config[targetList] = [];
     if (!config[targetList].includes(val)) config[targetList].push(val);
-
     saveConfig();
     closeModal('keywordModal');
   }
@@ -201,9 +258,28 @@ function removeKeyword(type, val) {
 }
 
 // Time Logic
-function openTimeModal(type) {
-  currentModalType = type;
-  const settings = type === 'active' ? config.activeMonitoring : config.midnightCheck;
+// Time Logic
+let timeModalTarget = 'active'; // 'active' or 'shutdown'
+
+function openTimeModal(type = 'active') {
+  timeModalTarget = type;
+  let settings = {};
+
+  if (type === 'active') {
+    settings = config.activeMonitoring || {};
+  } else if (type === 'shutdown') {
+    // Allow single time for shutdown, but modal expects start/end
+    // We will hide the 'start' part or 'end' part? 
+    // The modal has start/end inputs.
+    // Re-using the modal for a single time might be tricky if we don't hide one input.
+    // For simplicity, let's just use the "End Time" slot as the "Shutdown Time" and hide the Start Time row in CSS?
+    // Or better: just populate both with the same time or dummy, but only save one.
+    // Let's hide the start time input group if mode is shutdown.
+
+    const t = config.scheduledShutdown?.time || '23:00';
+    settings = { startTime: '00:00', endTime: t };
+  }
+
   const [sk, sm] = (settings.startTime || '00:00').split(':');
   const [ek, em] = (settings.endTime || '00:00').split(':');
 
@@ -211,6 +287,18 @@ function openTimeModal(type) {
   document.getElementById('modalStartMinute').value = sm;
   document.getElementById('modalEndHour').value = ek;
   document.getElementById('modalEndMinute').value = em;
+
+  // Toggle visibility and labels based on target
+  const startGroup = document.getElementById('modalStartGroup');
+  const endLabel = document.getElementById('modalEndLabel');
+
+  if (type === 'shutdown') {
+    if (startGroup) startGroup.style.display = 'none'; // Hide Start Time
+    if (endLabel) endLabel.textContent = 'Shutdown Time';
+  } else {
+    if (startGroup) startGroup.style.display = 'flex'; // Show Start Time
+    if (endLabel) endLabel.textContent = 'End Time';
+  }
 
   document.getElementById('timeModal').classList.add('open');
 }
@@ -224,12 +312,13 @@ function saveTimeModal() {
   const timeStr_start = `${sh}:${sm}`;
   const timeStr_end = `${eh}:${em}`;
 
-  if (currentModalType === 'active') {
+  if (timeModalTarget === 'active') {
+    if (!config.activeMonitoring) config.activeMonitoring = {};
     config.activeMonitoring.startTime = timeStr_start;
     config.activeMonitoring.endTime = timeStr_end;
-  } else {
-    config.midnightCheck.startTime = timeStr_start;
-    config.midnightCheck.endTime = timeStr_end;
+  } else if (timeModalTarget === 'shutdown') {
+    if (!config.scheduledShutdown) config.scheduledShutdown = {};
+    config.scheduledShutdown.time = timeStr_end;
   }
 
   saveConfig();
