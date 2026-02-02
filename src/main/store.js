@@ -93,6 +93,10 @@ function setStoreValue(key, value) {
 }
 
 function updateStore(updates) {
+    if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+        console.error('updateStore: Invalid updates parameter');
+        return;
+    }
     Object.keys(updates).forEach(key => {
         store[key] = updates[key];
     });
