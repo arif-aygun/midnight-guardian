@@ -1,4 +1,5 @@
 module.exports = {
+  "dryRun": true,
   "activeMonitoring": {
     "enabled": true,
     "startTime": "14:00",
@@ -6,15 +7,14 @@ module.exports = {
     "checkIntervalSeconds": 2,
     "warningIntervalSeconds": 30,
     "autoCloseAfterWarnings": 3,
-    "useMidnightCheckTime": true
+    "shutdownAtEnd": false
   },
-  "midnightCheck": {
-    "enabled": true,
-    "startTime": "00:00",
-    "endTime": "06:00",
-    "enableShutdown": false,
-    "countdownSeconds": 10
+  "scheduledShutdown": {
+    "enabled": false,
+    "time": "23:00"
   },
+
+  "strictMode": false,
   "blockKeywords": [
     "youtube",
     "facebook",
@@ -25,7 +25,8 @@ module.exports = {
     "netflix",
     "game",
     "steam",
-    "twitch"
+    "twitch",
+    "notepad"
   ],
   "allowKeywords": [
     "work",
@@ -41,7 +42,8 @@ module.exports = {
       "steam.exe",
       "epicgameslauncher.exe",
       "riotclientservices.exe",
-      "leagueclient.exe"
+      "leagueclient.exe",
+      "notepad.exe"
     ],
     "domains": [
       "youtube.com",
@@ -58,7 +60,9 @@ module.exports = {
       "devenv.exe",
       "idea64.exe",
       "sublime_text.exe",
-      "notion.exe"
+      "notion.exe",
+      "electron.exe",
+      "midnight-guardian.exe"
     ],
     "domains": [
       "github.com",

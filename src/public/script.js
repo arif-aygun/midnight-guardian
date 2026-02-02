@@ -1,658 +1,407 @@
 let config = {};
-let eventSource = null;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 3;
+let currentModalType = '';
 
-// Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
-  initializeTimePickers();
   loadConfig();
-  connectLogStream();
-  loadStatus();
+
+  // Modal background click close
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal(overlay.id);
+    });
+  });
+
+  // IPC listeners
+  window.electronAPI.onUpdateOverlay((overlayConfig) => {
+    // Optional: Update specific UI if overlay changes state
+  });
+
+  window.electronAPI.onLogUpdate((log) => {
+    const logsList = document.getElementById('logsList');
+    if (logsList) {
+      const entry = document.createElement('div');
+      const time = new Date(log.timestamp).toLocaleTimeString();
+      entry.style.marginBottom = '4px';
+      entry.style.borderBottom = '1px solid #333';
+      const timeSpan = document.createElement('span');
+      timeSpan.style.color = '#666';
+      timeSpan.textContent = `[${time}]`;
+      entry.appendChild(timeSpan);
+      entry.appendChild(document.createTextNode(' ' + log.message));
+      logsList.prepend(entry);
+    }
+  });
+
+  populateTimeSelects();
+  setupHoverEvents();
   
-  // Add event listener for checkbox
-  const useMidnightCheckbox = document.getElementById('useMidnightCheckTime');
-  if (useMidnightCheckbox) {
-    useMidnightCheckbox.addEventListener('change', toggleActiveTimeSettings);
+  // Time Modal event listeners
+  const timeModalApply = document.getElementById('timeModalApply');
+  const timeModalCancel = document.getElementById('timeModalCancel');
+  
+  if (timeModalApply) {
+    timeModalApply.addEventListener('click', saveTimeModal);
+  }
+  
+  if (timeModalCancel) {
+    timeModalCancel.addEventListener('click', () => closeModal('timeModal'));
   }
 });
 
-// Initialize time picker dropdowns
-function initializeTimePickers() {
-  // Active monitoring time pickers
-  const activeStartHour = document.getElementById('activeStartHour');
-  const activeStartMinute = document.getElementById('activeStartMinute');
-  const activeEndHour = document.getElementById('activeEndHour');
-  const activeEndMinute = document.getElementById('activeEndMinute');
-  
-  // Midnight check time pickers
-  const midnightStartHour = document.getElementById('midnightStartHour');
-  const midnightStartMinute = document.getElementById('midnightStartMinute');
-  const midnightEndHour = document.getElementById('midnightEndHour');
-  const midnightEndMinute = document.getElementById('midnightEndMinute');
-  
-  // Populate hours (00-23)
-  for (let i = 0; i < 24; i++) {
-    const hour = i.toString().padStart(2, '0');
-    [activeStartHour, activeEndHour, midnightStartHour, midnightEndHour].forEach(select => {
-      if (select) {
-        const option = document.createElement('option');
-        option.value = hour;
-        option.textContent = hour;
-        select.appendChild(option);
-      }
-    });
-  }
-  
-  // Populate minutes (00-59)
-  for (let i = 0; i < 60; i++) {
-    const minute = i.toString().padStart(2, '0');
-    [activeStartMinute, activeEndMinute, midnightStartMinute, midnightEndMinute].forEach(select => {
-      if (select) {
-        const option = document.createElement('option');
-        option.value = minute;
-        option.textContent = minute;
-        select.appendChild(option);
-      }
-    });
-  }
-  
-  // Add change event listeners
-  if (activeStartHour && activeStartMinute) {
-    [activeStartHour, activeStartMinute].forEach(el => {
-      el.addEventListener('change', () => updateTimeDisplay('activeStart'));
-    });
-  }
-  if (activeEndHour && activeEndMinute) {
-    [activeEndHour, activeEndMinute].forEach(el => {
-      el.addEventListener('change', () => updateTimeDisplay('activeEnd'));
-    });
-  }
-  if (midnightStartHour && midnightStartMinute) {
-    [midnightStartHour, midnightStartMinute].forEach(el => {
-      el.addEventListener('change', () => updateTimeDisplay('midnightStart'));
-    });
-  }
-  if (midnightEndHour && midnightEndMinute) {
-    [midnightEndHour, midnightEndMinute].forEach(el => {
-      el.addEventListener('change', () => updateTimeDisplay('midnightEnd'));
-    });
-  }
+function setupHoverEvents() {
+  // Active Mode
+  const activeData = {
+    'btn-off': 'Disables all monitoring logic',
+    'btn-active': 'Blocks distractors during scheduled hours',
+    'btn-strict': 'Prevents quitting and enforces blocks',
+    'shutdownAtEnd': 'Forces PC shutdown when focus time ends'
+  };
+
+  Object.keys(activeData).forEach(id => {
+    const btn = document.getElementById(id);
+    // Bind to description. If btn is checkbox/parent, bind accordingly?
+    // Using previous pattern:
+    if (btn) {
+      btn.addEventListener('mouseenter', () => {
+        if (document.getElementById('active-desc'))
+          document.getElementById('active-desc').textContent = activeData[id];
+      });
+      btn.addEventListener('mouseleave', () => {
+        if (document.getElementById('active-desc'))
+          document.getElementById('active-desc').textContent = 'Select a mode to see details';
+      });
+    }
+  });
 }
 
-function setTimePicker(hourId, minuteId, timeString) {
-  const [hour, minute] = timeString.split(':');
-  const hourEl = document.getElementById(hourId);
-  const minuteEl = document.getElementById(minuteId);
-  
-  if (hourEl) hourEl.value = hour;
-  if (minuteEl) minuteEl.value = minute;
-}
-
-function getTimePicker(hourId, minuteId) {
-  const hour = document.getElementById(hourId)?.value || '00';
-  const minute = document.getElementById(minuteId)?.value || '00';
-  return `${hour}:${minute}`;
-}
-
-function updateTimeDisplay(type) {
-  let hour, minute, displayId;
-  
-  if (type === 'activeStart') {
-    hour = document.getElementById('activeStartHour')?.value;
-    minute = document.getElementById('activeStartMinute')?.value;
-    displayId = 'activeStartTimeDisplay';
-  } else if (type === 'activeEnd') {
-    hour = document.getElementById('activeEndHour')?.value;
-    minute = document.getElementById('activeEndMinute')?.value;
-    displayId = 'activeEndTimeDisplay';
-  } else if (type === 'midnightStart') {
-    hour = document.getElementById('midnightStartHour')?.value;
-    minute = document.getElementById('midnightStartMinute')?.value;
-    displayId = 'midnightStartTimeDisplay';
-  } else if (type === 'midnightEnd') {
-    hour = document.getElementById('midnightEndHour')?.value;
-    minute = document.getElementById('midnightEndMinute')?.value;
-    displayId = 'midnightEndTimeDisplay';
-  }
-  
-  if (!hour || !minute) return;
-  
-  const h = parseInt(hour);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
-  const timeStr = `${hour}:${minute} (${hour12}:${minute} ${period})`;
-  
-  const displayEl = document.getElementById(displayId);
-  if (displayEl) {
-    displayEl.textContent = timeStr;
-  }
-}
-
-function toggleActiveTimeSettings() {
-  const useMidnightTime = document.getElementById('useMidnightCheckTime')?.checked;
-  const timeSettings = document.getElementById('activeTimeSettings');
-  const endTimeSettings = document.getElementById('activeEndTimeSettings');
-  
-  if (useMidnightTime) {
-    if (timeSettings) timeSettings.style.display = 'none';
-    if (endTimeSettings) endTimeSettings.style.display = 'none';
-  } else {
-    if (timeSettings) timeSettings.style.display = 'block';
-    if (endTimeSettings) endTimeSettings.style.display = 'block';
-  }
-}
-
-// Load configuration from server
+// Load configuration
 async function loadConfig() {
   try {
-    const response = await fetch('/api/config');
-    config = await response.json();
-    
-    // Active Monitoring
-    const activeEnabled = document.getElementById('activeEnabled');
-    const useMidnightCheckTime = document.getElementById('useMidnightCheckTime');
-    const checkInterval = document.getElementById('checkInterval');
-    const warningInterval = document.getElementById('warningInterval');
-    const maxWarnings = document.getElementById('maxWarnings');
-    
-    if (activeEnabled) activeEnabled.checked = config.activeMonitoring?.enabled || false;
-    if (useMidnightCheckTime) useMidnightCheckTime.checked = config.activeMonitoring?.useMidnightCheckTime || false;
-    if (checkInterval) checkInterval.value = config.activeMonitoring?.checkIntervalSeconds || 7;
-    if (warningInterval) warningInterval.value = config.activeMonitoring?.warningIntervalSeconds || 10;
-    if (maxWarnings) maxWarnings.value = config.activeMonitoring?.autoCloseAfterWarnings || 3;
-    
-    setTimePicker('activeStartHour', 'activeStartMinute', config.activeMonitoring?.startTime || '00:00');
-    setTimePicker('activeEndHour', 'activeEndMinute', config.activeMonitoring?.endTime || '23:59');
-    
-    // Midnight Check
-    const midnightEnabled = document.getElementById('midnightEnabled');
-    const midnightShutdown = document.getElementById('midnightShutdown');
-    const midnightCountdown = document.getElementById('midnightCountdown');
-    
-    if (midnightEnabled) midnightEnabled.checked = config.midnightCheck?.enabled || false;
-    if (midnightShutdown) midnightShutdown.checked = config.midnightCheck?.enableShutdown || false;
-    if (midnightCountdown) midnightCountdown.value = config.midnightCheck?.countdownSeconds || 10;
-    
-    setTimePicker('midnightStartHour', 'midnightStartMinute', config.midnightCheck?.startTime || '20:00');
-    setTimePicker('midnightEndHour', 'midnightEndMinute', config.midnightCheck?.endTime || '23:00');
-    
-    // Update displays
-    updateTimeDisplay('activeStart');
-    updateTimeDisplay('activeEnd');
-    updateTimeDisplay('midnightStart');
-    updateTimeDisplay('midnightEnd');
-    
-    // Toggle visibility
-    toggleActiveTimeSettings();
-    
-    // Render all lists
-    renderBlockKeywords();
-    renderAllowKeywords();
-    renderBlocklistProcesses();
-    renderBlocklistDomains();
-    renderWhitelistProcesses();
-    renderWhitelistDomains();
-    
+    config = await window.electronAPI.getConfig();
+    renderUI();
   } catch (error) {
     console.error('Error loading config:', error);
-    showNotification('❌ Error loading configuration', 'error');
   }
 }
 
-// Save configuration
+// Render Logic
+// Render Logic
+function renderUI() {
+  // Active Monitoring State
+  const activeEnabled = config.activeMonitoring?.enabled || false;
+  // Strict Mode State
+  const strictEnabled = config.strictMode || false;
+
+  // Button States: Off, Active, Strict
+  updateButtonState('btn-off', !activeEnabled);
+  updateButtonState('btn-active', activeEnabled && !strictEnabled);
+  updateButtonState('btn-strict', activeEnabled && strictEnabled);
+
+  // Configs
+  if (document.getElementById('runOnStartup')) {
+    document.getElementById('runOnStartup').checked = config.runOnStartup || false;
+  }
+
+  if (document.getElementById('shutdownAtEnd')) {
+    document.getElementById('shutdownAtEnd').checked = config.activeMonitoring?.shutdownAtEnd || false;
+  }
+
+
+  // Schedules
+  updateTimeDisplay('active', config.activeMonitoring);
+
+  // Scheduled Shutdown
+  if (config.scheduledShutdown) {
+    const sEnabled = document.getElementById('shutdownEnabled');
+    const sTimeDisplay = document.getElementById('shutdownTimeDisplay');
+
+    if (sEnabled) sEnabled.checked = config.scheduledShutdown.enabled || false;
+
+    if (sTimeDisplay) {
+      // Format time to 12h AM/PM
+      const rawTime = config.scheduledShutdown.time || '23:00';
+      const [h, m] = rawTime.split(':');
+      const d = new Date();
+      d.setHours(h);
+      d.setMinutes(m);
+      const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      sTimeDisplay.textContent = timeStr;
+    }
+  }
+
+  // Chips
+  renderChips('blockChips', config.blockKeywords, 'block');
+  // Removed allowChips rendering if UI element is gone, or keep if UI still exists? 
+  // UI for Allowed Chips was removed in previous steps? Wait, I didn't verify that fully.
+  // The 'Sections' replacement in index.html replaced everything from Active to Rules.
+  // Wait, I replaced 'Section: Sleep Guardian' but kept 'Section: Rules & Whitelist'.
+  // Let's assume 'allowChips' container might still be there if I didn't delete it.
+  // I will check if 'allowChips' exists before rendering.
+  if (document.getElementById('allowChips')) {
+    renderChips('allowChips', config.allowKeywords, 'allow');
+  }
+
+  // Stats (Mock for now)
+  if (document.getElementById('stat-blocks')) document.getElementById('stat-blocks').textContent = config.stats?.blocksBlocked || 0;
+  if (document.getElementById('stat-saved')) document.getElementById('stat-saved').textContent = config.stats?.timeSaved || '0h 0m';
+  if (document.getElementById('stat-streak')) document.getElementById('stat-streak').textContent = config.stats?.streakDays || 1;
+}
+
+function updateButtonState(id, isActive) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  if (isActive) btn.classList.add('active');
+  else btn.classList.remove('active');
+}
+
+function updateTimeDisplay(type, settings) {
+  const display = document.getElementById(`${type}TimeDisplay`);
+  if (settings && settings.startTime && settings.endTime) {
+    display.textContent = `${settings.startTime} - ${settings.endTime}`;
+  }
+}
+
+function renderChips(containerId, items, type) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  (items || []).forEach(item => {
+    const chip = document.createElement('div');
+    chip.className = `chip ${type}`;
+
+    // Add the keyword text safely
+    const textNode = document.createTextNode(item);
+    chip.appendChild(textNode);
+
+    // Add the remove ("×") control with a safe event listener
+    const removeSpan = document.createElement('span');
+    removeSpan.textContent = '×';
+    removeSpan.style.marginLeft = '4px';
+    removeSpan.style.opacity = '0.5';
+    removeSpan.style.cursor = 'pointer';
+    removeSpan.addEventListener('click', () => {
+      removeKeyword(type, item);
+    });
+
+    chip.appendChild(removeSpan);
+    container.appendChild(chip);
+  });
+}
+
+// Logic Actions
+
+// Logic Actions
+
+function toggleStrict() {
+  // Ensure activeMonitoring exists
+  if (!config.activeMonitoring) config.activeMonitoring = {};
+
+  // Toggle strict mode
+  config.strictMode = !config.strictMode;
+
+  // If enabling strict mode, ensure monitoring is ON
+  if (config.strictMode) {
+    config.activeMonitoring.enabled = true;
+  }
+
+  saveConfig();
+}
+
+function setActiveMode(enabled, shutdown) {
+  if (!config.activeMonitoring) config.activeMonitoring = {};
+  config.activeMonitoring.enabled = enabled;
+  // If 'Strict' button clicked (enable=true, shutdown=true), set strictMode
+  // logic map: 
+  // Off: enabled=false
+  // Active: enabled=true, strict=false
+  // Strict: enabled=true, strict=true
+
+  // Wait, strictMode is a separate top-level config?
+  // Previous code had toggleStrict(). 
+  // New UI has 3 buttons: Off, Active, Strict.
+  // Let's map them:
+
+  if (shutdown) {
+    // This param name 'shutdown' in the HTML onclick for Strict is confusing, 
+    // let's assume it means 'isStrict' based on the "Strict" label.
+    config.strictMode = true;
+  } else {
+    if (enabled) config.strictMode = false;
+    // if disabled (Off), strictly speaking strictMode doesn't matter, but let's leave it.
+  }
+
+  saveConfig();
+}
+
 async function saveConfig() {
   try {
-    // Active Monitoring
-    config.activeMonitoring.enabled = document.getElementById('activeEnabled')?.checked || false;
-    config.activeMonitoring.useMidnightCheckTime = document.getElementById('useMidnightCheckTime')?.checked || false;
-    
-    // ALWAYS save the active monitoring times, regardless of checkbox
-    config.activeMonitoring.startTime = getTimePicker('activeStartHour', 'activeStartMinute');
-    config.activeMonitoring.endTime = getTimePicker('activeEndHour', 'activeEndMinute');
-    
-    config.activeMonitoring.checkIntervalSeconds = parseInt(document.getElementById('checkInterval')?.value || 7);
-    config.activeMonitoring.warningIntervalSeconds = parseInt(document.getElementById('warningInterval')?.value || 10);
-    config.activeMonitoring.autoCloseAfterWarnings = parseInt(document.getElementById('maxWarnings')?.value || 3);
-    
-    // Midnight Check
-    config.midnightCheck.enabled = document.getElementById('midnightEnabled')?.checked || false;
-    config.midnightCheck.startTime = getTimePicker('midnightStartHour', 'midnightStartMinute');
-    config.midnightCheck.endTime = getTimePicker('midnightEndHour', 'midnightEndMinute');
-    config.midnightCheck.enableShutdown = document.getElementById('midnightShutdown')?.checked || false;
-    config.midnightCheck.countdownSeconds = parseInt(document.getElementById('midnightCountdown')?.value || 10);
-    
-    // Send to server
-    const response = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config)
-    });
-    
-    if (response.ok) {
-      showNotification('✅ Configuration saved successfully!', 'success');
-      // Reload config to see changes take effect
-      await loadConfig();
-    } else {
-      showNotification('❌ Error saving configuration', 'error');
+    // Config items
+    const runOnStartupEl = document.getElementById('runOnStartup');
+    if (runOnStartupEl) config.runOnStartup = runOnStartupEl.checked;
+
+    if (config.activeMonitoring) {
+      const shutdownAtEndEl = document.getElementById('shutdownAtEnd');
+      if (shutdownAtEndEl) config.activeMonitoring.shutdownAtEnd = shutdownAtEndEl.checked;
     }
+
+    // Scheduled Shutdown
+    if (!config.scheduledShutdown) config.scheduledShutdown = {};
+    const sEnabled = document.getElementById('shutdownEnabled');
+    const sTime = document.getElementById('shutdownTime');
+    if (sEnabled) config.scheduledShutdown.enabled = sEnabled.checked;
+    if (sTime) config.scheduledShutdown.time = sTime.value;
+
+    await window.electronAPI.saveConfig(config);
+
+    // Visual feedback
+    const saveBtn = document.querySelector('button[onclick="saveConfig()"] span');
+    if (saveBtn) {
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = '✅ Saved';
+      setTimeout(() => saveBtn.textContent = originalText, 1500);
+    }
+
+    renderUI();
   } catch (error) {
-    console.error('Error saving config:', error);
-    showNotification('❌ Error saving configuration', 'error');
+    console.error('Save failed:', error);
+    alert('Failed to save settings: ' + error.message);
   }
 }
 
-// Block Keywords
-function addBlockKeyword() {
-  const input = document.getElementById('newBlockKeyword');
-  if (!input) return;
-  
-  const keyword = input.value.trim();
-  
-  if (keyword && !config.blockKeywords.includes(keyword)) {
-    config.blockKeywords.push(keyword);
-    renderBlockKeywords();
-    input.value = '';
+// Keyword Logic
+function openKeywordModal(type) {
+  currentModalType = type;
+  document.getElementById('modalKeywordInput').value = '';
+  document.getElementById('keywordModal').classList.add('open');
+  document.getElementById('modalKeywordInput').focus();
+}
+
+function saveKeywordModal() {
+  const val = document.getElementById('modalKeywordInput').value.trim();
+  if (val) {
+    const targetList = currentModalType === 'block' ? 'blockKeywords' : 'allowKeywords';
+    if (!config[targetList]) config[targetList] = [];
+    if (!config[targetList].includes(val)) config[targetList].push(val);
+    saveConfig();
+    closeModal('keywordModal');
   }
 }
 
-function removeBlockKeyword(keyword) {
-  config.blockKeywords = config.blockKeywords.filter(k => k !== keyword);
-  renderBlockKeywords();
-}
-
-function renderBlockKeywords() {
-  const container = document.getElementById('blockKeywords');
-  if (!container) return;
-  
-  container.innerHTML = (config.blockKeywords || []).map(keyword => `
-    <span class="keyword-item">
-      ${keyword}
-      <button class="remove-btn" onclick="removeBlockKeyword('${keyword.replace(/'/g, "\\'")}')">×</button>
-    </span>
-  `).join('');
-}
-
-// Allow Keywords
-function addAllowKeyword() {
-  const input = document.getElementById('newAllowKeyword');
-  if (!input) return;
-  
-  const keyword = input.value.trim();
-  
-  if (keyword && !config.allowKeywords.includes(keyword)) {
-    config.allowKeywords.push(keyword);
-    renderAllowKeywords();
-    input.value = '';
+function removeKeyword(type, val) {
+  const targetList = type === 'block' ? 'blockKeywords' : 'allowKeywords';
+  if (config[targetList]) {
+    config[targetList] = config[targetList].filter(k => k !== val);
   }
+  saveConfig();
 }
 
-function removeAllowKeyword(keyword) {
-  config.allowKeywords = config.allowKeywords.filter(k => k !== keyword);
-  renderAllowKeywords();
-}
+// Time Logic
+// Time Logic
+let timeModalTarget = 'active'; // 'active' or 'shutdown'
 
-function renderAllowKeywords() {
-  const container = document.getElementById('allowKeywords');
-  if (!container) return;
-  
-  container.innerHTML = (config.allowKeywords || []).map(keyword => `
-    <span class="keyword-item">
-      ${keyword}
-      <button class="remove-btn" onclick="removeAllowKeyword('${keyword.replace(/'/g, "\\'")}')">×</button>
-    </span>
-  `).join('');
-}
+function openTimeModal(type = 'active') {
+  timeModalTarget = type;
+  let settings = {};
 
-// Blocklist Processes
-function addBlocklistProcess() {
-  const input = document.getElementById('newBlocklistProcess');
-  if (!input) return;
-  
-  const process = input.value.trim();
-  
-  if (process && !config.blocklist.processes.includes(process)) {
-    config.blocklist.processes.push(process);
-    renderBlocklistProcesses();
-    input.value = '';
+  if (type === 'active') {
+    settings = config.activeMonitoring || {};
+  } else if (type === 'shutdown') {
+    // Allow single time for shutdown, but modal expects start/end
+    // We will hide the 'start' part or 'end' part? 
+    // The modal has start/end inputs.
+    // Re-using the modal for a single time might be tricky if we don't hide one input.
+    // For simplicity, let's just use the "End Time" slot as the "Shutdown Time" and hide the Start Time row in CSS?
+    // Or better: just populate both with the same time or dummy, but only save one.
+    // Let's hide the start time input group if mode is shutdown.
+
+    const t = config.scheduledShutdown?.time || '23:00';
+    settings = { startTime: '00:00', endTime: t };
   }
-}
 
-function removeBlocklistProcess(process) {
-  config.blocklist.processes = config.blocklist.processes.filter(p => p !== process);
-  renderBlocklistProcesses();
-}
+  const [sk, sm] = (settings.startTime || '00:00').split(':');
+  const [ek, em] = (settings.endTime || '00:00').split(':');
 
-function renderBlocklistProcesses() {
-  const container = document.getElementById('blocklistProcesses');
-  if (!container) return;
-  
-  container.innerHTML = (config.blocklist?.processes || []).map(process => `
-    <span class="keyword-item">
-      ${process}
-      <button class="remove-btn" onclick="removeBlocklistProcess('${process.replace(/'/g, "\\'")}')">×</button>
-    </span>
-  `).join('');
-}
+  document.getElementById('modalStartHour').value = sk;
+  document.getElementById('modalStartMinute').value = sm;
+  document.getElementById('modalEndHour').value = ek;
+  document.getElementById('modalEndMinute').value = em;
 
-// Blocklist Domains
-function addBlocklistDomain() {
-  const input = document.getElementById('newBlocklistDomain');
-  if (!input) return;
-  
-  const domain = input.value.trim();
-  
-  if (domain && !config.blocklist.domains.includes(domain)) {
-    config.blocklist.domains.push(domain);
-    renderBlocklistDomains();
-    input.value = '';
-  }
-}
+  // Toggle visibility and labels based on target
+  const startGroup = document.getElementById('modalStartGroup');
+  const endLabel = document.getElementById('modalEndLabel');
 
-function removeBlocklistDomain(domain) {
-  config.blocklist.domains = config.blocklist.domains.filter(d => d !== domain);
-  renderBlocklistDomains();
-}
-
-function renderBlocklistDomains() {
-  const container = document.getElementById('blocklistDomains');
-  if (!container) return;
-  
-  container.innerHTML = (config.blocklist?.domains || []).map(domain => `
-    <span class="keyword-item">
-      ${domain}
-      <button class="remove-btn" onclick="removeBlocklistDomain('${domain.replace(/'/g, "\\'")}')">×</button>
-    </span>
-  `).join('');
-}
-
-// Whitelist Processes
-function addWhitelistProcess() {
-  const input = document.getElementById('newWhitelistProcess');
-  if (!input) return;
-  
-  const process = input.value.trim();
-  
-  if (process && !config.whitelist.processes.includes(process)) {
-    config.whitelist.processes.push(process);
-    renderWhitelistProcesses();
-    input.value = '';
-  }
-}
-
-function removeWhitelistProcess(process) {
-  config.whitelist.processes = config.whitelist.processes.filter(p => p !== process);
-  renderWhitelistProcesses();
-}
-
-function renderWhitelistProcesses() {
-  const container = document.getElementById('whitelistProcesses');
-  if (!container) return;
-  
-  container.innerHTML = (config.whitelist?.processes || []).map(process => `
-    <span class="keyword-item">
-      ${process}
-      <button class="remove-btn" onclick="removeWhitelistProcess('${process.replace(/'/g, "\\'")}')">×</button>
-    </span>
-  `).join('');
-}
-
-// Whitelist Domains
-function addWhitelistDomain() {
-  const input = document.getElementById('newWhitelistDomain');
-  if (!input) return;
-  
-  const domain = input.value.trim();
-  
-  if (domain && !config.whitelist.domains.includes(domain)) {
-    config.whitelist.domains.push(domain);
-    renderWhitelistDomains();
-    input.value = '';
-  }
-}
-
-function removeWhitelistDomain(domain) {
-  config.whitelist.domains = config.whitelist.domains.filter(d => d !== domain);
-  renderWhitelistDomains();
-}
-
-function renderWhitelistDomains() {
-  const container = document.getElementById('whitelistDomains');
-  if (!container) return;
-  
-  container.innerHTML = (config.whitelist?.domains || []).map(domain => `
-    <span class="keyword-item">
-      ${domain}
-      <button class="remove-btn" onclick="removeWhitelistDomain('${domain.replace(/'/g, "\\'")}')">×</button>
-    </span>
-  `).join('');
-}
-
-// Tab management
-function showTab(tabName) {
-  // Hide all tabs
-  document.querySelectorAll('.tab-content').forEach(tab => {
-    tab.classList.remove('active');
-  });
-  
-  // Remove active from all tab buttons
-  document.querySelectorAll('.tab').forEach(btn => {
-    btn.classList.remove('active');
-  });
-  
-  // Show selected tab
-  const selectedTab = document.getElementById(tabName + 'Tab');
-  if (selectedTab) {
-    selectedTab.classList.add('active');
-  }
-  
-  // Add active to selected button
-  event.target.classList.add('active');
-}
-
-// Section collapse/expand
-function toggleSection(header) {
-  const content = header.nextElementSibling;
-  const arrow = header.querySelector('.collapse-arrow');
-  
-  if (content.style.display === 'none') {
-    content.style.display = 'block';
-    arrow.textContent = '▼';
+  if (type === 'shutdown') {
+    if (startGroup) startGroup.style.display = 'none'; // Hide Start Time
+    if (endLabel) endLabel.textContent = 'Shutdown Time';
   } else {
-    content.style.display = 'none';
-    arrow.textContent = '▶';
+    if (startGroup) startGroup.style.display = 'flex'; // Show Start Time
+    if (endLabel) endLabel.textContent = 'End Time';
   }
+
+  document.getElementById('timeModal').classList.add('open');
 }
 
-// Status management
-async function loadStatus() {
-  try {
-    const response = await fetch('/api/status');
-    const data = await response.json();
-    
-    const statusEl = document.getElementById('status');
-    const statusTextEl = document.getElementById('statusText');
-    
-    if (data.active) {
-      statusEl.className = 'status active';
-      statusTextEl.textContent = '✅ Active';
-    } else {
-      statusEl.className = 'status inactive';
-      statusTextEl.textContent = '⏸️ Paused';
-    }
-  } catch (error) {
-    console.error('Error loading status:', error);
-  }
-}
+function saveTimeModal() {
+  const sh = document.getElementById('modalStartHour').value;
+  const sm = document.getElementById('modalStartMinute').value;
+  const eh = document.getElementById('modalEndHour').value;
+  const em = document.getElementById('modalEndMinute').value;
 
-async function startMonitoring() {
-  try {
-    await fetch('/api/start', { method: 'POST' });
-    showNotification('✅ Monitoring started', 'success');
-    loadStatus();
-  } catch (error) {
-    showNotification('❌ Error starting monitoring', 'error');
-  }
-}
+  const timeStr_start = `${sh}:${sm}`;
+  const timeStr_end = `${eh}:${em}`;
 
-async function stopMonitoring() {
-  try {
-    await fetch('/api/stop', { method: 'POST' });
-    showNotification('⏸️ Monitoring paused', 'success');
-    loadStatus();
-  } catch (error) {
-    showNotification('❌ Error stopping monitoring', 'error');
+  if (timeModalTarget === 'active') {
+    if (!config.activeMonitoring) config.activeMonitoring = {};
+    config.activeMonitoring.startTime = timeStr_start;
+    config.activeMonitoring.endTime = timeStr_end;
+  } else if (timeModalTarget === 'shutdown') {
+    if (!config.scheduledShutdown) config.scheduledShutdown = {};
+    config.scheduledShutdown.time = timeStr_end;
   }
+
+  saveConfig();
+  closeModal('timeModal');
 }
 
 // Logs
-function connectLogStream() {
-  if (eventSource) {
-    eventSource.close();
-  }
-  
-  eventSource = new EventSource('/api/logs/stream');
-  
-  eventSource.onopen = () => {
-    reconnectAttempts = 0;
-  };
-  
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      
-      if (data.cleared) {
-        const logsListEl = document.getElementById('logsList');
-        if (logsListEl) {
-          logsListEl.innerHTML = '<div class="empty-state">No logs yet</div>';
-        }
-      } else if (data.logs) {
-        renderLogs(data.logs);
-      } else if (data.log) {
-        addLogToUI(data.log);
-      }
-    } catch (err) {
-      console.error('Error parsing SSE data:', err);
-    }
-  };
-  
-  eventSource.onerror = (error) => {
-    console.error('Log stream error:', error);
-    eventSource.close();
-    eventSource = null;
-    
-    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-      reconnectAttempts++;
-      const delay = reconnectAttempts * 2000;
-      setTimeout(connectLogStream, delay);
-    }
-  };
+function showLogs() {
+  // Ideally fetch logs via IPC
+  // For now we just show
+  document.getElementById('logsModal').classList.add('open');
 }
 
-function renderLogs(logs) {
-  const logsListEl = document.getElementById('logsList');
-  if (!logsListEl) return;
-  
-  if (!logs || logs.length === 0) {
-    logsListEl.innerHTML = '<div class="empty-state">No logs yet</div>';
-    return;
-  }
-  
-  logsListEl.innerHTML = logs.map(log => createLogHTML(log)).join('');
+function clearLogs() {
+  document.getElementById('logsList').innerHTML = '';
 }
 
-function addLogToUI(log) {
-  const logsListEl = document.getElementById('logsList');
-  if (!logsListEl) return;
-  
-  const emptyState = logsListEl.querySelector('.empty-state');
-  if (emptyState) {
-    logsListEl.innerHTML = '';
-  }
-  
-  const logHTML = createLogHTML(log);
-  logsListEl.insertAdjacentHTML('afterbegin', logHTML);
+// Shared
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
 }
 
-function createLogHTML(log) {
-  const typeClass = log.type || 'info';
-  const icon = getLogIcon(log.type);
-  return `
-    <div class="log-item ${typeClass}">
-      <span class="log-icon">${icon}</span>
-      <span class="log-message">${log.message}</span>
-      <span class="log-time">${new Date(log.timestamp).toLocaleTimeString()}</span>
-    </div>
-  `;
-}
+function populateTimeSelects() {
+  const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 
-function getLogIcon(type) {
-  switch (type) {
-    case 'success': return '✅';
-    case 'warning': return '⚠️';
-    case 'error': return '❌';
-    case 'info': return 'ℹ️';
-    default: return '•';
-  }
-}
+  ['modalStartHour', 'modalEndHour'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    hours.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      sel.appendChild(opt);
+    });
+  });
 
-async function clearLogs() {
-  try {
-    await fetch('/api/logs/clear', { method: 'POST' });
-  } catch (error) {
-    console.error('Clear logs error:', error);
-  }
+  ['modalStartMinute', 'modalEndMinute'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    minutes.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      sel.appendChild(opt);
+    });
+  });
 }
-
-// Notifications
-function showNotification(message, type) {
-  const notification = document.createElement('div');
-  notification.className = `notification ${type}`;
-  notification.textContent = message;
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 15px 20px;
-    background: ${type === 'success' ? '#10b981' : '#ef4444'};
-    color: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    z-index: 10000;
-    animation: slideIn 0.3s ease;
-  `;
-  
-  document.body.appendChild(notification);
-  
-  setTimeout(() => {
-    notification.style.animation = 'slideOut 0.3s ease';
-    setTimeout(() => notification.remove(), 300);
-  }, 3000);
-}
-
-// Add CSS animations
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes slideIn {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-  
-  @keyframes slideOut {
-    from {
-      transform: translateX(0);
-      opacity: 1;
-    }
-    to {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-  }
-`;
-document.head.appendChild(style);

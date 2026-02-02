@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Midnight Guardian Overlay</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            /* Dim background */
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: white;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .container {
+            text-align: center;
+            background: #1e1e24;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            max-width: 500px;
+            width: 90%;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .container.urgent {
+            border-color: #ff4757;
+            background: #2d1b1b;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 24px;
+            color: #fff;
+        }
+
+        p {
+            margin: 0 0 30px;
+            line-height: 1.6;
+            color: #aaa;
+        }
+
+        button {
+            background: #3296fa;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+            background: #1e80e0;
+        }
+
+        /* Minimalist Monitor Mode */
+        #shutdownTimer {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff4757;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            z-index: 10000;
+            cursor: default;
+            pointer-events: auto;
+            /* Capture mouse on timer */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container" id="container">
+        <span class="icon" id="icon">⚠️</span>
+        <h1 id="title">Restricted App</h1>
+        <p id="message">This application is restricted during focus hours.</p>
+        <button id="okBtn">I Understand</button>
+    </div>
+
+    <!-- Shutdown Timer (Minimalist) -->
+    <div id="shutdownTimer">
+        ⏱️ <span id="timerValue">60</span>s
+    </div>
+
+    <script>
+        // Use electronAPI exposed by preload (secure with contextIsolation)
+        const container = document.getElementById('container');
+        const iconEl = document.getElementById('icon');
+        const titleEl = document.getElementById('title');
+        const messageEl = document.getElementById('message');
+        const okBtn = document.getElementById('okBtn');
+        const timerEl = document.getElementById('shutdownTimer');
+
+        // Mouse Event Forwarding Logic
+        timerEl.addEventListener('mouseenter', () => {
+            // When hovering timer, capture events
+            if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                window.electronAPI.setIgnoreMouseEvents(false);
+            }
+        });
+
+        timerEl.addEventListener('mouseleave', () => {
+            // If we are in "timer-only" mode (container hidden), forward events (ignore mouse)
+            if (container.style.display === 'none') {
+                if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                    window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+                }
+            }
+        });
+
+        // Listen for overlay updates
+        if (window.electronAPI && window.electronAPI.onUpdateOverlay) {
+            window.electronAPI.onUpdateOverlay((data) => {
+                // Mode Handling
+                if (data.mode === 'timer-only') {
+                    container.style.display = 'none'; // Hide main warning
+                    timerEl.style.display = 'flex';   // Flex for the new layout
+                    document.getElementById('timerValue').textContent = String(data.timerSeconds || '0');
+
+                    // Enable click-through on body, but timer captures
+                    if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                        window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
+                    }
+                } else {
+                    // Blocking Mode
+                    container.style.display = 'block';
+                    timerEl.style.display = 'none';
+
+                    // SECURITY: Use textContent (not innerHTML) to prevent XSS from malicious process names
+                    titleEl.textContent = data.title;   // Auto-escapes HTML
+                    messageEl.textContent = data.message; // Auto-escapes HTML
+
+                    if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
+                        window.electronAPI.setIgnoreMouseEvents(false); // Capture clicks
+                    }
+                }
+
+                if (data.isUrgent) {
+                    container.classList.add('urgent');
+                    iconEl.textContent = '🛑';
+                    okBtn.textContent = 'Closing Soon...';
+                } else {
+                    container.classList.remove('urgent');
+                    iconEl.textContent = '⚠️';
+                    okBtn.textContent = 'I Understand';
+                }
+            });
+        }
+
+        okBtn.addEventListener('click', () => {
+            if (window.electronAPI && window.electronAPI.hideOverlay) {
+                window.electronAPI.hideOverlay();
+            }
+        });
+    </script>
+</body>
+
+</html>

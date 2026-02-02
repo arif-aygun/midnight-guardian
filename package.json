@@ -2,24 +2,79 @@
   "name": "midnight-guardian",
   "version": "1.0.0",
   "description": "Smart distraction blocker for Windows that helps you maintain healthy digital habits and protect your sleep schedule.",
-  "main": "index.js",
+  "main": "src/main/main.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "run": "node src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "electron .",
+    "dev": "cross-env DRY_RUN=true electron .",
+    "test": "cross-env DRY_RUN=true electron .",
+    "dist": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "distraction-blocker",
+    "digital-wellbeing",
+    "productivity"
+  ],
+  "author": "Ahmet Arif Aygün",
+  "license": "MIT",
+  "build": {
+    "appId": "com.arifaygun.midnight-guardian",
+    "productName": "Midnight Guardian",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "!src/state.json",
+      "!archive/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/active-win/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
   "type": "commonjs",
   "dependencies": {
     "active-win": "^8.2.1",
+    "electron-is-dev": "^3.0.1",
     "express": "^5.1.0",
     "node-notifier": "^10.0.1",
     "node-schedule": "^2.1.1"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
+    "electron": "^40.1.0",
+    "electron-builder": "^26.4.0",
     "nodemon": "^3.1.10"
   }
 }

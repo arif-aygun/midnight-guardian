@@ -70,16 +70,21 @@ app.post('/api/config', (req, res) => {
   try {
     const newConfig = req.body;
     const configPath = path.join(__dirname, 'config.js');
-    
+
     // Format the config nicely
     const configContent = `module.exports = ${JSON.stringify(newConfig, null, 2)};`;
-    
+
     // Write to file
     fs.writeFileSync(configPath, configContent, 'utf8');
-    
+
     // Clear the require cache so the new config loads
     delete require.cache[require.resolve('./config')];
-    
+
+    // Notify about config change
+    if (global.onConfigChange) {
+      global.onConfigChange(newConfig);
+    }
+
     addLog('Configuration saved successfully', 'success');
     res.json({ success: true, message: 'Configuration saved' });
   } catch (error) {
@@ -100,18 +105,18 @@ app.get('/api/logs/stream', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in nginx
-  
+
   // Send initial logs
   res.write(`data: ${JSON.stringify({ logs })}\n\n`);
-  
+
   // Add client to list
   logClients.push(res);
-  
+
   // Keep connection alive with periodic heartbeat
   const heartbeat = setInterval(() => {
     res.write(':heartbeat\n\n');
   }, 15000); // Every 15 seconds
-  
+
   // Handle client disconnect
   req.on('close', () => {
     clearInterval(heartbeat);
@@ -122,12 +127,12 @@ app.get('/api/logs/stream', (req, res) => {
 app.post('/api/logs/clear', (req, res) => {
   // Clear the logs array first
   logs = [];
-  
+
   // Broadcast clear event to all connected clients
   const clearEvent = { cleared: true };
   let successCount = 0;
   let failCount = 0;
-  
+
   logClients.forEach((client, index) => {
     try {
       const data = `data: ${JSON.stringify(clearEvent)}\n\n`;
@@ -137,12 +142,12 @@ app.post('/api/logs/clear', (req, res) => {
       failCount++;
     }
   });
-  
+
   // Add the "cleared" message
   setTimeout(() => {
     addLog('Logs cleared', 'info');
   }, 200);
-  
+
   res.json({ success: true, clientsNotified: successCount });
 });
 
@@ -163,7 +168,7 @@ function addLog(message, level = 'info') {
   };
   logs.push(log);
   console.log(`[${level.toUpperCase()}] ${message}`);
-  
+
   // Broadcast to all connected clients in real-time
   const logUpdate = { log };
   logClients.forEach(client => {
@@ -179,9 +184,13 @@ function isMonitoringActive() {
   return isActive;
 }
 
-function startServer() {
+function startServer(onConfigChange) {
   loadState(); // Load saved state before starting
-  
+
+  if (onConfigChange) {
+    global.onConfigChange = onConfigChange;
+  }
+
   app.listen(PORT, () => {
     console.log(`Midnight Guardian dashboard: http://localhost:${PORT}`);
     addLog(`Dashboard started on port ${PORT}`, 'info');
