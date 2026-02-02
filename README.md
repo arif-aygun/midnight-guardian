@@ -275,6 +275,24 @@ npm start
 - Verify `state.json` file is writable
 - Try restarting the application
 
+## 📚 Documentation
+
+### Copilot Review Documentation
+Comprehensive documentation for addressing code review comments from the Electron migration PR:
+
+- **[COPILOT_REVIEW_INDEX.md](./COPILOT_REVIEW_INDEX.md)** - Start here for an overview
+- **[PR4_REVIEW_SUMMARY.md](./PR4_REVIEW_SUMMARY.md)** - Executive summary for stakeholders
+- **[COPILOT_REVIEW_SOLUTIONS.md](./COPILOT_REVIEW_SOLUTIONS.md)** - Detailed technical solutions
+
+These documents cover:
+- 🔴 Critical security vulnerabilities (command injection, XSS)
+- 🟡 Functional issues (memory leaks, race conditions, performance)
+- 🟢 Code quality improvements (unused code, accessibility)
+- 📅 4-phase implementation roadmap with timelines
+- 🧪 Comprehensive testing requirements
+
+**Note:** These are planned improvements for future releases. The priority is publishing the desktop app first.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Here's how:
@@ -284,6 +302,8 @@ Contributions are welcome! Here's how:
 3. Commit your changes (`git commit -m 'Add AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+**For security fixes:** Please review [COPILOT_REVIEW_SOLUTIONS.md](./COPILOT_REVIEW_SOLUTIONS.md) for documented security issues and their solutions.
 
 ## 📝 License
 
