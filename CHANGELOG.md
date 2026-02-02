@@ -53,23 +53,20 @@ This is the first official release of Midnight Guardian - a smart distraction bl
 ### 🏗️ Technical Details
 
 - Built with Electron 40.1.0 and Node.js
-- Uses electron-builder for cross-platform packaging
+- Uses electron-builder for packaging
 - Active window tracking via active-win package
 - System notifications via node-notifier
 - Scheduled tasks via node-schedule
-- Supports Windows, macOS, and Linux (Windows fully tested)
+- Windows 10/11 support
 
 ### 📦 Available Downloads
 
 - **Windows**: NSIS Installer (.exe) and Portable (.exe)
-- **macOS**: DMG and ZIP
-- **Linux**: AppImage and DEB
 
 ### 🔒 Platform Support
 
 - ✅ **Windows 10/11**: Fully supported and tested
-- ⚠️ **macOS**: Built but untested
-- ⚠️ **Linux**: Built but untested
+- ⏳ **macOS & Linux**: Planned for future releases
 
 ### 📝 Notes
 

@@ -42,18 +42,18 @@ git push origin v1.0.0
 
 1. **GitHub Actions Workflow Triggers**
    - Workflow: `.github/workflows/build-release.yml`
-   - Builds for: Windows, macOS, Linux
-   - Duration: ~10-15 minutes
+   - Builds for: **Windows only**
+   - Duration: ~5-10 minutes
 
 2. **Artifacts Created**
    - **Windows**: `.exe` installers (NSIS + Portable)
-   - **macOS**: `.dmg` and `.zip` files
-   - **Linux**: `.AppImage` and `.deb` packages
 
 3. **Monitor Progress**
    - Go to: https://github.com/arif-aygun/midnight-guardian/actions
    - Click on the "Build and Release" workflow run
-   - Wait for all three jobs (Windows, macOS, Linux) to complete
+   - Wait for the Windows build job to complete
+
+**Note**: Currently, only Windows builds are generated as the app is not yet ready for other platforms.
 
 ## 📦 Creating the GitHub Release
 
@@ -72,10 +72,6 @@ Once the workflow completes successfully:
    - Attach the following files:
      - `Midnight-Guardian-Setup-1.0.0.exe` (Windows NSIS Installer)
      - `Midnight-Guardian-1.0.0-Portable.exe` (Windows Portable)
-     - `Midnight-Guardian-1.0.0.dmg` (macOS DMG)
-     - `Midnight-Guardian-1.0.0-mac.zip` (macOS ZIP)
-     - `Midnight-Guardian-1.0.0.AppImage` (Linux AppImage)
-     - `midnight-guardian_1.0.0_amd64.deb` (Linux DEB)
 
 4. **Publish**
    - ✅ Check "Set as the latest release"

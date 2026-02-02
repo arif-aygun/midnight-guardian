@@ -38,13 +38,12 @@ This is the **first stable release** of Midnight Guardian. Thank you for your in
 
 ## 📥 Installation
 
-### Windows (Recommended)
+### Windows
 Download the installer for Windows:
 - **NSIS Installer** (`.exe`) - Full installation with shortcuts
 - **Portable** (`.exe`) - No installation required
 
-### macOS & Linux
-Builds are available but **untested**. Windows is the primary supported platform.
+**Platform Support**: This release is for **Windows 10/11 only**. macOS and Linux support is planned for future releases.
 
 ## 🚀 Getting Started
 
@@ -63,8 +62,6 @@ Builds are available but **untested**. Windows is the primary supported platform
 
 ## 🐛 Known Issues
 
-- macOS and Linux support is experimental and untested
-- Some system processes cannot be closed (by design)
 - Administrator privileges required for force-close functionality
 
 ## 📝 Documentation

@@ -71,17 +71,15 @@ git push origin v1.0.0
 
 Once the tag is pushed, GitHub Actions will automatically:
 
-1. **Build for multiple platforms**:
+1. **Build for Windows**:
    - Windows: NSIS installer and portable executable
-   - macOS: DMG and ZIP archives
-   - Linux: AppImage and DEB packages
 
 2. **Create artifacts**:
    - Windows installers uploaded as `windows-installers`
-   - macOS installers uploaded as `macos-installers`
-   - Linux installers uploaded as `linux-installers`
 
 3. **Workflow location**: `.github/workflows/build-release.yml`
+
+**Note**: Currently, only Windows builds are generated as the app is not yet ready for macOS and Linux platforms.
 
 ### 6. Create GitHub Release
 
@@ -94,9 +92,7 @@ After the workflow completes:
 5. Copy the relevant section from `CHANGELOG.md` into the release notes
 6. Download the artifacts from the workflow run
 7. Attach the installers to the release:
-   - Windows: `.exe` files
-   - macOS: `.dmg` and `.zip` files
-   - Linux: `.AppImage` and `.deb` files
+   - Windows: `.exe` files (NSIS installer and portable)
 8. Mark as "Latest release" if appropriate
 9. Click "Publish release"
 
@@ -109,20 +105,7 @@ Before creating a release, test the build process locally:
 npm run dist -- --win
 ```
 
-### Build for macOS
-```bash
-npm run dist -- --mac
-```
-
-### Build for Linux
-```bash
-npm run dist -- --linux
-```
-
-### Build for all platforms
-```bash
-npm run dist
-```
+**Note**: macOS and Linux builds are not currently supported. The app is Windows-only at this time.
 
 Built installers will be in the `dist/` directory.
 
