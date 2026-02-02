@@ -2,7 +2,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, shell, screen } = require('elec
 const path = require('path');
 const isDev = require('electron-is-dev');
 const { setupMonitor, stopMonitor } = require('./monitor');
-const { getStore, setStoreValue } = require('./store');
+const { getStore, setStoreValue, updateStore } = require('./store');
 
 let mainWindow;
 let tray;
@@ -153,10 +153,8 @@ ipcMain.handle('get-config', async () => {
 });
 
 ipcMain.handle('save-config', async (event, newConfig) => {
-    // Update store
-    Object.keys(newConfig).forEach(key => {
-        setStoreValue(key, newConfig[key]);
-    });
+    // Update store with all changes at once
+    updateStore(newConfig);
 
     // Apply Startup Setting
     const openAtLogin = newConfig.runOnStartup === true;

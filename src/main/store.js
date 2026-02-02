@@ -92,7 +92,15 @@ function setStoreValue(key, value) {
     saveStore();
 }
 
+function updateStore(updates) {
+    Object.keys(updates).forEach(key => {
+        store[key] = updates[key];
+    });
+    saveStore();
+}
+
 module.exports = {
     getStore,
-    setStoreValue
+    setStoreValue,
+    updateStore
 };
