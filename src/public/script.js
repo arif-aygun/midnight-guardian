@@ -23,13 +23,29 @@ document.addEventListener('DOMContentLoaded', () => {
       const time = new Date(log.timestamp).toLocaleTimeString();
       entry.style.marginBottom = '4px';
       entry.style.borderBottom = '1px solid #333';
-      entry.innerHTML = `<span style="color:#666">[${time}]</span> ${log.message}`;
+      const timeSpan = document.createElement('span');
+      timeSpan.style.color = '#666';
+      timeSpan.textContent = `[${time}]`;
+      entry.appendChild(timeSpan);
+      entry.appendChild(document.createTextNode(' ' + log.message));
       logsList.prepend(entry);
     }
   });
 
   populateTimeSelects();
   setupHoverEvents();
+  
+  // Time Modal event listeners
+  const timeModalApply = document.getElementById('timeModalApply');
+  const timeModalCancel = document.getElementById('timeModalCancel');
+  
+  if (timeModalApply) {
+    timeModalApply.addEventListener('click', saveTimeModal);
+  }
+  
+  if (timeModalCancel) {
+    timeModalCancel.addEventListener('click', () => closeModal('timeModal'));
+  }
 });
 
 function setupHoverEvents() {
@@ -152,10 +168,22 @@ function renderChips(containerId, items, type) {
   (items || []).forEach(item => {
     const chip = document.createElement('div');
     chip.className = `chip ${type}`;
-    chip.innerHTML = `
-            ${item}
-            <span style="margin-left:4px; opacity:0.5; cursor:pointer;" onclick="removeKeyword('${type}', '${item.replace(/'/g, "\\'")}')">×</span>
-        `;
+
+    // Add the keyword text safely
+    const textNode = document.createTextNode(item);
+    chip.appendChild(textNode);
+
+    // Add the remove ("×") control with a safe event listener
+    const removeSpan = document.createElement('span');
+    removeSpan.textContent = '×';
+    removeSpan.style.marginLeft = '4px';
+    removeSpan.style.opacity = '0.5';
+    removeSpan.style.cursor = 'pointer';
+    removeSpan.addEventListener('click', () => {
+      removeKeyword(type, item);
+    });
+
+    chip.appendChild(removeSpan);
     container.appendChild(chip);
   });
 }
