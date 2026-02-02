@@ -14,6 +14,7 @@ let blockedAppHistory = {};
 let appWarningCounts = {};  // Persistent warning counts per app
 let midnightCheckJob = null;
 let shutdownInterval = null;  // Shutdown countdown interval
+let countdownInterval = null;  // Final warning countdown interval
 let lastLoggedTitle = '';
 let lastLoggedState = '';
 
@@ -56,6 +57,14 @@ function stopMonitor() {
         midnightCheckJob.cancel();
         midnightCheckJob = null;
     }
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    if (shutdownInterval) {
+        clearInterval(shutdownInterval);
+        shutdownInterval = null;
+    }
 }
 
 async function monitorLoop() {
@@ -93,6 +102,10 @@ async function checkActiveWindow(config) {
         if (!inActiveWindow) {
             if (lastLoggedState !== 'outside-window') {
                 hideOverlay();
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
                 currentBlockedApp = null;
                 lastLoggedState = 'outside-window';
             }
@@ -117,6 +130,10 @@ async function checkActiveWindow(config) {
             if (currentBlockedApp) {
                 addLog(`✅ Allowed: ${window.title}`, 'success');
                 hideOverlay();
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
                 currentBlockedApp = null;
             }
             return;
@@ -146,6 +163,10 @@ async function checkActiveWindow(config) {
         } else if (currentBlockedApp) {
             addLog(`✅ Unrestricted App`, 'info');
             hideOverlay();
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
             currentBlockedApp = null;
         }
 
@@ -172,6 +193,10 @@ function handleBlockedApp(processName, windowTitle, reason, config) {
             exec(`taskkill /IM "${processName}" /F`);
         }
 
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
         currentBlockedApp = null;
         return;
     }
@@ -223,12 +248,19 @@ function triggerFinalWarning(processName, config) {
     addLog(`🚨 FINAL WARNING: ${processName} will be closed`, 'warning');
     showOverlay('FINAL WARNING', `Closing ${processName} in 10 seconds!`, true);
 
+    // Clear any existing countdown to prevent multiple intervals
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+
     let remaining = 10;
-    const countdown = setInterval(() => {
+    countdownInterval = setInterval(() => {
         remaining--;
         updateOverlay('FINAL WARNING', `Closing ${processName} in ${remaining}s...`);
         if (remaining <= 0) {
-            clearInterval(countdown);
+            clearInterval(countdownInterval);
+            countdownInterval = null;
             // Check environment variable OR config setting
             if (isDryRunMode() || config.dryRun) {
                 addLog(`[DRY RUN] Would close ${processName}`, 'success');
