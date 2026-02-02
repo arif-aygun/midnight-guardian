@@ -3,9 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
     getConfig: () => ipcRenderer.invoke('get-config'),
     saveConfig: (config) => ipcRenderer.invoke('save-config', config),
-    startMonitoring: () => ipcRenderer.invoke('start-monitoring'),
-    stopMonitoring: () => ipcRenderer.invoke('stop-monitoring'),
     minimizeToTray: () => ipcRenderer.send('minimize-to-tray'),
+    quitApp: () => ipcRenderer.send('quit-app'),
 
     onLogUpdate: (callback) => {
         const subscription = (event, log) => callback(log);
@@ -25,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
 
     hideOverlay: () => ipcRenderer.send('hide-overlay'),
+    setIgnoreMouseEvents: (ignore, options) => ipcRenderer.send('set-ignore-mouse-events', ignore, options),
 
     completeSetup: () => ipcRenderer.send('setup-complete')
 });

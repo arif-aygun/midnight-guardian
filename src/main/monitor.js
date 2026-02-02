@@ -11,9 +11,18 @@ let currentBlockedApp = null;
 let warningCount = 0;
 let lastWarningTime = 0;
 let blockedAppHistory = {};
+let appWarningCounts = {};  // Persistent warning counts per app
 let midnightCheckJob = null;
+let shutdownInterval = null;  // Shutdown countdown interval
+let countdownInterval = null;  // Final warning countdown interval
 let lastLoggedTitle = '';
 let lastLoggedState = '';
+
+// Check for environment variable override (for development)
+// Use function to ensure it's evaluated at runtime, not module load time
+function isDryRunMode() {
+    return process.env.DRY_RUN === 'true';
+}
 
 function addLog(message, type = 'info') {
     const log = {
@@ -29,14 +38,13 @@ function addLog(message, type = 'info') {
 }
 
 function setupMonitor() {
-    console.log('Starting monitor...');
     const config = getStore();
 
     refreshScheduler(config);
 
     if (config.activeMonitoring && config.activeMonitoring.enabled) {
         monitorLoop();
-        addLog('✨ Active monitoring enabled', 'info');
+        addLog('✨ Monitoring service started', 'info');
     }
 }
 
@@ -49,6 +57,14 @@ function stopMonitor() {
         midnightCheckJob.cancel();
         midnightCheckJob = null;
     }
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    if (shutdownInterval) {
+        clearInterval(shutdownInterval);
+        shutdownInterval = null;
+    }
 }
 
 async function monitorLoop() {
@@ -57,52 +73,41 @@ async function monitorLoop() {
     await checkActiveWindow(config);
 
     if (config.activeMonitoring && config.activeMonitoring.enabled) {
-        monitorTimeout = setTimeout(monitorLoop, config.activeMonitoring.checkIntervalSeconds * 1000);
+        monitorTimeout = setTimeout(monitorLoop, (config.activeMonitoring?.checkIntervalSeconds || 2) * 1000);
     }
 }
 
 async function checkActiveWindow(config) {
-    // ... Port logic from index.js monitorActiveWindow ...
-    // Simplified for brevity, need to copy the core logic carefully
-
     try {
         const window = await activeWin();
         if (!window) return;
 
-        // Time Check Logic
-        let startTime, endTime;
-        if (config.activeMonitoring.useMidnightCheckTime && config.midnightCheck.enabled) {
-            startTime = config.midnightCheck.startTime;
-            endTime = config.midnightCheck.endTime;
-        } else {
-            startTime = config.activeMonitoring.startTime;
-            endTime = config.activeMonitoring.endTime;
-        }
-
-        // Check if within window (Logic same as index.js)
-        // ... Copy isWithinWindow logic ...
+        // --- 1. Check if we are in Active Window ---
         const now = new Date();
-        const currentHour = now.getHours();
-        const currentMinute = now.getMinutes();
-        const currentTimeInMinutes = currentHour * 60 + currentMinute;
-        const [startHour, startMinute] = startTime.split(':').map(Number);
-        const [endHour, endMinute] = endTime.split(':').map(Number);
-        const startTimeInMinutes = startHour * 60 + startMinute;
-        const endTimeInMinutes = endHour * 60 + endMinute;
+        const currentMins = now.getHours() * 60 + now.getMinutes();
 
-        let isWithinWindow = false;
-        if (startTimeInMinutes <= endTimeInMinutes) {
-            isWithinWindow = currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
-        } else {
-            isWithinWindow = currentTimeInMinutes >= startTimeInMinutes || currentTimeInMinutes < endTimeInMinutes;
-        }
+        const isTimeInWindow = (start, end) => {
+            if (!start || !end) return false;
+            const [sh, sm] = start.split(':').map(Number);
+            const [eh, em] = end.split(':').map(Number);
+            const sMins = sh * 60 + sm;
+            const eMins = eh * 60 + em;
+            if (sMins <= eMins) return currentMins >= sMins && currentMins < eMins;
+            else return currentMins >= sMins || currentMins < eMins;
+        };
 
-        if (!isWithinWindow) {
+        const inActiveWindow = config.activeMonitoring?.enabled &&
+            isTimeInWindow(config.activeMonitoring.startTime, config.activeMonitoring.endTime);
+
+        if (!inActiveWindow) {
             if (lastLoggedState !== 'outside-window') {
-                addLog(`⏰ Outside monitoring window (${startTime} - ${endTime})`, 'info');
-                lastLoggedState = 'outside-window';
                 hideOverlay();
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
                 currentBlockedApp = null;
+                lastLoggedState = 'outside-window';
             }
             return;
         }
@@ -110,31 +115,70 @@ async function checkActiveWindow(config) {
         const processName = window.owner.name.toLowerCase();
         const windowTitle = window.title.toLowerCase();
 
-        // Checking Logic
-        const isWhitelisted = config.whitelist.domains.some(d => windowTitle.includes(d.toLowerCase())) ||
-            config.whitelist.processes.some(p => processName.includes(p.toLowerCase()));
+        // --- 1.5. Self-Protection: Ignore Own Windows ---
+        // If the active window is the Guardian itself (Overlay, Dashboard), ignore it.
+        // This prevents the "Unrestricted App" reset when interacting with the overlay.
+        if (processName.includes('electron') || processName.includes('midnight-guardian')) {
+            return;
+        }
+
+        // --- 2. Whitelist Check (Global override) ---
+        const isWhitelisted = config.whitelist?.domains?.some(d => windowTitle.includes(d.toLowerCase())) ||
+            config.whitelist?.processes?.some(p => processName.includes(p.toLowerCase()));
 
         if (isWhitelisted) {
             if (currentBlockedApp) {
-                addLog(`✅ Switched to whitelisted app: "${window.title}"`, 'success');
+                addLog(`✅ Allowed: ${window.title}`, 'success');
+                hideOverlay();
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                currentBlockedApp = null;
+            }
+            return;
+        }
+
+        // --- 2.5. Allow Keywords Check (Override block keywords) ---
+        const hasAllowKeyword = config.allowKeywords?.some(k => windowTitle.includes(k.toLowerCase()));
+
+        if (hasAllowKeyword) {
+            if (currentBlockedApp) {
+                addLog(`✅ Allowed by keyword: ${window.title}`, 'success');
                 hideOverlay();
                 currentBlockedApp = null;
             }
             return;
         }
 
-        // Blocklist Logic
-        const isBlocklisted = config.blocklist.processes.some(p => processName.includes(p.toLowerCase())) ||
-            config.blocklist.domains.some(d => windowTitle.includes(d.toLowerCase()));
-        const matchedBlockKeyword = config.blockKeywords.find(k => windowTitle.includes(k.toLowerCase()));
+        // --- 3. Enforcement Logic ---
+        let shouldBlock = false;
+        let blockReason = '';
 
-        if (isBlocklisted || matchedBlockKeyword) {
-            const reason = isBlocklisted ? 'blocklisted' : `keyword "${matchedBlockKeyword}"`;
-            handleBlockedApp(processName, window.title, reason, config);
+        // Active Mode Enforcement
+        if (inActiveWindow) {
+            const isBlocklisted = config.blocklist?.processes?.some(p => processName.includes(p.toLowerCase())) ||
+                config.blocklist?.domains?.some(d => windowTitle.includes(d.toLowerCase()));
+            const matchedKeyword = config.blockKeywords?.find(k => windowTitle.includes(k.toLowerCase()));
+
+            if (isBlocklisted) {
+                shouldBlock = true;
+                blockReason = 'Blocklisted App';
+            } else if (matchedKeyword) {
+                shouldBlock = true;
+                blockReason = `Keyword "${matchedKeyword}"`;
+            }
+        }
+
+        if (shouldBlock) {
+            handleBlockedApp(processName, window.title, blockReason, config);
         } else if (currentBlockedApp) {
-            // App switched away from blocked app
-            addLog(`✅ Switched to unrestricted app`, 'info');
+            addLog(`✅ Unrestricted App`, 'info');
             hideOverlay();
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
             currentBlockedApp = null;
         }
 
@@ -143,71 +187,189 @@ async function checkActiveWindow(config) {
     }
 }
 
+
+
 function handleBlockedApp(processName, windowTitle, reason, config) {
     const now = Date.now();
     const maxWarnings = config.activeMonitoring.autoCloseAfterWarnings;
 
+    // STRICT MODE: Skip all warnings and close immediately
+    if (config.strictMode) {
+        addLog(`🔒 [STRICT] Blocking ${processName}: ${reason}`, 'warning');
+
+        // Immediate force close
+        if (isDryRunMode() || config.dryRun) {
+            addLog(`[DRY RUN] Would immediately close ${processName}`, 'success');
+        } else {
+            addLog(`🔨 Force closing ${processName} (Strict Mode)`, 'warning');
+            exec(`taskkill /IM "${processName}" /F`);
+        }
+
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
+        currentBlockedApp = null;
+        return;
+    }
+
+    // NORMAL MODE: Progressive warnings
+    // Normalize key
+    const appKey = processName;
+
     if (currentBlockedApp !== processName) {
-        // New block
-        warningCount = 1;
-        lastWarningTime = now;
+        // New block session for this app
         currentBlockedApp = processName;
 
-        addLog(`🚫 Blocked ${processName} (${reason}) - Warning 1/${maxWarnings}`, 'warning');
-        showOverlay('Restricted App Detected', `${processName} is blocked.\nReason: ${reason}\n\nPlease close this application.`);
+        // Retrieve internal count, default to 0 if new (or start at 1 if not previously tracked)
+        if (!appWarningCounts[appKey]) appWarningCounts[appKey] = 0;
+
+        // Increment immediately on new detection
+        appWarningCounts[appKey]++;
+
+        const currentCount = appWarningCounts[appKey];
+        lastWarningTime = now;
+
+        if (currentCount >= maxWarnings) {
+            // Final warning / Force close logic
+            triggerFinalWarning(processName, config);
+        } else {
+            // Standard Warning
+            addLog(`🚫 Blocked ${processName} (${reason}) - Warning ${currentCount}/${maxWarnings}`, 'warning');
+            showOverlay('Restricted App Detected', `${processName} is blocked.\nReason: ${reason}\n\nPlease close this application.`);
+        }
     } else {
         // Existing block, check time for next warning
         const timeSince = (now - lastWarningTime) / 1000;
         if (timeSince >= config.activeMonitoring.warningIntervalSeconds) {
-            warningCount++;
+            appWarningCounts[appKey]++;
             lastWarningTime = now;
+            const currentCount = appWarningCounts[appKey];
 
-            if (warningCount >= maxWarnings) {
-                // Final warning / Force close
-                addLog(`🚨 FINAL WARNING: ${processName} will be closed`, 'warning');
-                showOverlay('FINAL WARNING', `Closing ${processName} in 10 seconds!`, true);
-
-                // Force close countdown
-                let remaining = 10;
-                const countdown = setInterval(() => {
-                    remaining--;
-                    updateOverlay('FINAL WARNING', `Closing ${processName} in ${remaining}s...`);
-                    if (remaining <= 0) {
-                        clearInterval(countdown);
-                        if (config.dryRun) {
-                            addLog(`[DRY RUN] Would close ${processName}`, 'success');
-                            hideOverlay();
-                        } else {
-                            addLog(`🔨 Force closing ${processName}`, 'warning');
-                            exec(`taskkill /IM "${processName}.exe" /F`); // Simple taskkill
-                            hideOverlay();
-                        }
-                        currentBlockedApp = null;
-                        warningCount = 0;
-                    }
-                }, 1000);
+            if (currentCount >= maxWarnings) {
+                triggerFinalWarning(processName, config);
             } else {
-                addLog(`⚠️ ${processName} - Warning ${warningCount}/${maxWarnings}`, 'warning');
-                showOverlay('Restricted App Detected', `${processName} is blocked.\nWarning ${warningCount}/${maxWarnings}`);
+                addLog(`⚠️ ${processName} - Warning ${currentCount}/${maxWarnings}`, 'warning');
+                showOverlay('Restricted App Detected', `${processName} is blocked.\nWarning ${currentCount}/${maxWarnings}`);
             }
         }
     }
 }
 
-function refreshScheduler(config) {
-    if (midnightCheckJob) midnightCheckJob.cancel();
+function triggerFinalWarning(processName, config) {
+    addLog(`🚨 FINAL WARNING: ${processName} will be closed`, 'warning');
+    showOverlay('FINAL WARNING', `Closing ${processName} in 10 seconds!`, true);
 
-    if (config.midnightCheck.enabled) {
-        const [h, m] = config.midnightCheck.endTime.split(':');
-        midnightCheckJob = schedule.scheduleJob({ hour: h, minute: m }, () => {
-            // Midnight logic
-            addLog('🌙 Midnight Check triggered', 'warning');
-            if (config.midnightCheck.enableShutdown) {
-                showOverlay('Midnight Check', 'System shutdown initiated...', true);
-                // ... shutdown logic ...
-            }
-        });
+    // Clear any existing countdown to prevent multiple intervals
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
     }
+
+    let remaining = 10;
+    countdownInterval = setInterval(() => {
+        remaining--;
+        updateOverlay('FINAL WARNING', `Closing ${processName} in ${remaining}s...`);
+        if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            // Check environment variable OR config setting
+            if (isDryRunMode() || config.dryRun) {
+                addLog(`[DRY RUN] Would close ${processName}`, 'success');
+                hideOverlay();
+            } else {
+                addLog(`🔨 Force closing ${processName}`, 'warning');
+                exec(`taskkill /IM "${processName}" /F`);
+                hideOverlay();
+            }
+            currentBlockedApp = null;
+            // Reset count after punishment
+            appWarningCounts[processName] = 0;
+        }
+    }, 1000);
+}
+
+function refreshScheduler(config) {
+    try {
+        if (midnightCheckJob) midnightCheckJob.cancel();
+
+        // Helper to validate time
+        const isValidTime = (t) => /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(t);
+
+        // Schedule Shutdown at End Time if enabled
+        if (config.activeMonitoring?.enabled && config.activeMonitoring?.shutdownAtEnd) {
+            if (isValidTime(config.activeMonitoring.endTime)) {
+                const [h, m] = config.activeMonitoring.endTime.split(':').map(Number);
+                midnightCheckJob = schedule.scheduleJob({ hour: h, minute: m }, () => {
+                    initiateShutdownSequence(config, 'Focus Session Ended');
+                });
+                addLog(`📅 Scheduled shutdown for ${config.activeMonitoring.endTime}`, 'info');
+            } else {
+                console.error('Invalid Active End Time:', config.activeMonitoring.endTime);
+            }
+        }
+
+        // New: Schedule Daily Shutdown
+        if (config.scheduledShutdown?.enabled && config.scheduledShutdown?.time) {
+            if (isValidTime(config.scheduledShutdown.time)) {
+                const [h, m] = config.scheduledShutdown.time.split(':').map(Number);
+
+                const job = schedule.scheduleJob({ hour: h, minute: m }, () => {
+                    initiateShutdownSequence(config, 'Daily Scheduled Shutdown');
+                });
+
+                if (global.scheduledShutdownJob) global.scheduledShutdownJob.cancel();
+                global.scheduledShutdownJob = job;
+
+                addLog(`📅 Daily Shutdown scheduled for ${config.scheduledShutdown.time}`, 'info');
+            } else {
+                console.error('Invalid Scheduled Shutdown Time:', config.scheduledShutdown.time);
+            }
+        } else {
+            if (global.scheduledShutdownJob) global.scheduledShutdownJob.cancel();
+        }
+    } catch (err) {
+        console.error('Scheduler Error:', err);
+    }
+}
+
+
+
+function initiateShutdownSequence(config, reason) {
+    addLog(`🌙 ${reason}. Initiating Shutdown.`, 'warning');
+
+    // 60s Shutdown Countdown
+    let secondsLeft = 60;
+
+    // Force show overlay in timer mode
+    updateOverlay(reason, '', {
+        mode: 'timer-only',
+        timerSeconds: secondsLeft,
+        forceShow: true
+    });
+
+    if (shutdownInterval) clearInterval(shutdownInterval);
+
+    shutdownInterval = setInterval(() => {
+        secondsLeft--;
+        // Keep updating
+        updateOverlay(reason, '', {
+            mode: 'timer-only',
+            timerSeconds: secondsLeft
+        });
+
+        if (secondsLeft <= 0) {
+            clearInterval(shutdownInterval);
+            addLog('💤 Executing System Shutdown', 'warning');
+            // Check environment variable OR config setting
+            if (!isDryRunMode() && !config.dryRun) {
+                exec('shutdown /s /t 0');
+            } else {
+                addLog('[DRY RUN] Shutdown command skipped', 'success');
+                hideOverlay();
+            }
+        }
+    }, 1000);
 }
 
 module.exports = {
