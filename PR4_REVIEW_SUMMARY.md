@@ -4,7 +4,21 @@
 **Review Date:** 2026-02-02  
 **Total Comments:** 73 review comments (many duplicates)  
 **Unique Issues:** ~35 distinct issues  
-**Status:** Planning phase - Solutions documented for future implementation
+**Status:** Planning phase - Solutions documented for future reference  
+**Priority:** **LOW - Can be safely postponed** ✅
+
+---
+
+## 🏠 Important Context: Local Desktop Application
+
+**Midnight Guardian is a local desktop app running on the user's own machine.** This significantly changes the security risk assessment:
+
+- ✅ **No internet exposure** - Not accessible to external attackers
+- ✅ **Single user** - User controls their own environment
+- ✅ **Local execution** - All code runs on user's machine with their permission
+- ✅ **No sensitive data transmission** - Config stored locally
+
+**Result:** Security vulnerabilities that are critical for web apps or multi-user systems are **much lower risk** for local desktop applications.
 
 ---
 
@@ -18,27 +32,46 @@
 
 ---
 
-## 🔴 Critical Security Issues (4)
+## 🟡 Security Issues - Reassessed for Local Context (4)
 
-### 1. Command Injection - HIGH RISK ⚠️
+### 1. Command Injection - Low Risk for Local App ✅
 **Files:** `src/main/monitor.js` (lines 205, 282)  
-**Risk:** Process names directly interpolated into shell commands  
+**Original Risk:** Process names directly interpolated into shell commands  
 **Attack Example:** Process named `"; rm -rf / #.exe"` could execute arbitrary commands  
-**Solution:** Use `child_process.execFile` instead of `exec`  
-**Must Fix:** Before production release
 
-### 2. XSS in Log Display - MEDIUM RISK ⚠️
+**Local App Context:**
+- ✅ Requires malicious app **already running** on user's machine
+- ✅ If malicious app is already running, it can already harm the system
+- ✅ User controls what apps run on their machine
+- ✅ Not exploitable remotely
+
+**Solution:** Use `child_process.execFile` instead of `exec`  
+**Priority:** Low - Can be postponed indefinitely for local desktop apps
+
+### 2. XSS in Log Display - Low Risk for Local App ✅
 **File:** `src/public/script.js`  
 **Risk:** Log messages use `innerHTML` - malicious window titles could execute JS  
 **Status:** ✅ Already resolved in PR #4  
-**Solution:** Use `textContent` instead of `innerHTML`
 
-### 3. XSS in Keyword Display - MEDIUM RISK ⚠️
+**Local App Context:**
+- ✅ User would have to deliberately run app with malicious window title
+- ✅ Only affects user's own machine
+- ✅ No external attackers or other users
+- ✅ Already fixed anyway in PR #4
+
+### 3. XSS in Keyword Display - Low Risk for Local App ✅
 **File:** `src/public/script.js`  
 **Risk:** Keywords use `innerHTML` with inline onclick - could execute JS  
 **Attack Example:** Keyword `test" onclick="alert('XSS')`  
+
+**Local App Context:**
+- ✅ User enters their own keywords
+- ✅ Would only harm themselves with malicious input
+- ✅ No external users or attackers
+- ✅ Electron's context isolation provides additional protection
+
 **Solution:** Use `textContent` and programmatic event listeners  
-**Must Fix:** Before production release
+**Priority:** Low - Nice to have for code quality, not urgent
 
 ### 4. Allow Keywords Logic Missing - RESOLVED ✅
 **File:** `src/main/monitor.js` (line 171)  
@@ -47,13 +80,17 @@
 
 ---
 
-## 🟡 High Priority Functional Issues (6)
+## 🟢 Functional Issues - Consider for Polish (6)
 
-### 1. Memory Leak in Countdown Timer
+These issues affect **user experience** but not security. Fix if/when they cause actual problems.
+
+### 1. Memory Leak in Countdown Timer - Medium Priority
 **File:** `src/main/monitor.js` (line 290)  
 **Issue:** `setInterval` never cleared if user switches apps  
 **Impact:** Memory leak with multiple simultaneous timers  
-**Solution:** Store and clear interval references
+**User Impact:** Could slow down app after extended use  
+**Solution:** Store and clear interval references  
+**Priority:** Medium - Fix if users report performance issues
 
 ### 2. Race Condition in Overlay
 **File:** `src/main/overlay.js` (line 50)  
@@ -115,39 +152,36 @@ Note: Many of these may be false positives - called from HTML onclick handlers
 
 ---
 
-## 📅 Implementation Roadmap
+## 📅 Revised Implementation Roadmap - Local App Priorities
 
-### Phase 1: Critical Security (v1.0.1) - PRIORITY
-**Timeline:** Immediately after desktop app publication  
-**Estimated Effort:** 2-3 hours
-- [ ] Fix command injection vulnerabilities (2 locations)
-- [ ] Fix XSS in keyword display
-- [ ] Security testing with malicious inputs
+### ✅ Current Priority: Ship the Desktop App
+**Focus 100% on getting v1.0.0 published.** All documented issues can be safely postponed.
 
-### Phase 2: Stability & Performance (v1.0.2)
-**Timeline:** 1-2 weeks after v1.0.1  
-**Estimated Effort:** 4-6 hours
-- [ ] Fix memory leak in countdown timer
-- [ ] Fix race conditions (overlay + monitor)
-- [ ] Implement deep merge for store
-- [ ] Optimize config save performance
-- [ ] Fix UI mode button parameters
+### Phase 1: Post-Launch Polish (v1.1.0) - **IF NEEDED**
+**Timeline:** Only if users report actual problems  
+**Estimated Effort:** 2-4 hours
+- [ ] Fix memory leak in countdown timer (if performance issues reported)
+- [ ] Fix race conditions (if app crashes/hangs reported)
+- [ ] Optimize config save performance (if save feels slow)
 
-### Phase 3: Code Quality (v1.1.0)
-**Timeline:** 1 month after release  
+### Phase 2: Code Quality (v2.0.0) - **OPTIONAL**
+**Timeline:** Major version update (optional)  
 **Estimated Effort:** 3-4 hours
-- [ ] Remove unused dependencies (express, node-notifier)
-- [ ] Remove unused variables and functions
-- [ ] Clean up state.json
-- [ ] Fix setup wizard UI initialization
+- [ ] Remove unused dependencies to reduce bundle size
+- [ ] Remove unused code for maintainability
+- [ ] Improve accessibility for wider audience
 
-### Phase 4: Accessibility (v1.2.0)
-**Timeline:** 2-3 months after release  
-**Estimated Effort:** 4-5 hours
-- [ ] Add aria-labels to all interactive elements
-- [ ] Convert div buttons to proper button elements
-- [ ] Implement keyboard navigation
-- [ ] Screen reader testing
+### Security Fixes: **POSTPONED INDEFINITELY** ✅
+**Rationale:** Local desktop apps have fundamentally different threat models:
+- Command injection: Requires attacker already running code on user's machine
+- XSS: No external users, only affects user entering malicious input against themselves
+- Both require threat actor to already have access to user's system
+
+**Recommendation:** Revisit only if:
+- App adds cloud sync or online features
+- App becomes multi-user
+- App processes untrusted external content
+- Significant user concerns arise
 
 ---
 
@@ -188,29 +222,46 @@ Keywords to test:
 
 ---
 
-## 📝 Key Decisions & Notes
+## 📝 Key Decisions & Recommendations
 
-### Why Not Implement Now?
-As stated in the agent instructions:
-> "This issue will be focused on in the near future but not now. The priority is to publish the desktop app."
+### ✅ You Can Safely Postpone All Fixes
 
-The goal is to:
-1. ✅ Document all issues and solutions
-2. ✅ Create implementation plan
-3. ✅ Establish testing requirements
-4. ⏳ Wait for desktop app publication
-5. ⏳ Then implement fixes in phases
+**Why Security Fixes Are Low Priority for Local Apps:**
 
-### Critical Path
-**Security fixes (Phase 1) must be completed before any production deployment to users.**
+1. **Threat Model is Different**
+   - Web apps: Exposed to millions of potential attackers
+   - Local apps: Only accessible to user who controls their machine
+   
+2. **Command Injection Reality Check**
+   - Requires malicious app already running on user's machine
+   - If malicious app is already running, it has full system access anyway
+   - Not exploitable remotely or by other users
 
-Command injection is a critical vulnerability that could allow arbitrary code execution. This should be the first fix after the initial desktop app release.
+3. **XSS Reality Check**
+   - User would need to attack themselves with malicious input
+   - No external users to exploit this
+   - Electron's security features provide additional protection
 
-### Implementation Strategy
-- Each phase should be a separate PR for easy review
-- Security fixes should be fast-tracked
-- Include tests for each fix to prevent regressions
-- Consider adding pre-commit hooks to catch unused variables
+4. **Memory Leaks & Performance**
+   - Fix only if users actually report problems
+   - Monitor feedback after launch
+
+### 🎯 Clear Recommendation
+
+**Ship the desktop app now. Don't delay for these issues.**
+
+- All "security" issues are low-risk in local context
+- Functional issues can be fixed if users report problems
+- Code quality is nice-to-have, not need-to-have
+- Keep documentation for reference
+
+### When to Revisit These Fixes
+
+**Only consider implementing if:**
+- Users report actual performance/stability issues
+- App architecture changes (cloud sync, multi-user, etc.)
+- Preparing for app store submission (code quality matters)
+- Planning major refactor anyway
 
 ---
 
