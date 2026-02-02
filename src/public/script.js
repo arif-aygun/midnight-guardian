@@ -34,15 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   populateTimeSelects();
   setupHoverEvents();
-  
+
   // Time Modal event listeners
   const timeModalApply = document.getElementById('timeModalApply');
   const timeModalCancel = document.getElementById('timeModalCancel');
-  
+
   if (timeModalApply) {
     timeModalApply.addEventListener('click', saveTimeModal);
   }
-  
+
   if (timeModalCancel) {
     timeModalCancel.addEventListener('click', () => closeModal('timeModal'));
   }
@@ -315,10 +315,10 @@ function openTimeModal(type = 'active') {
     // Let's hide the start time input group if mode is shutdown.
 
     const t = config.scheduledShutdown?.time || '23:00';
-    settings = { startTime: '00:00', endTime: t };
+    settings = { startTime: '09:00', endTime: t };
   }
 
-  const [sk, sm] = (settings.startTime || '00:00').split(':');
+  const [sk, sm] = (settings.startTime || '09:00').split(':');
   const [ek, em] = (settings.endTime || '00:00').split(':');
 
   document.getElementById('modalStartHour').value = sk;

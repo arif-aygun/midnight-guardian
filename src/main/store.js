@@ -15,7 +15,7 @@ const defaults = {
     // Focus Mode settings
     activeMonitoring: {
         enabled: true,               // Focus mode on/off
-        startTime: '00:00',          // Monitoring window start
+        startTime: '09:00',          // Monitoring window start
         endTime: '23:59',            // Monitoring window end
         checkIntervalSeconds: 7,     // How often to check active window
         warningIntervalSeconds: 10,  // Time between warnings
