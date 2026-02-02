@@ -23,7 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const time = new Date(log.timestamp).toLocaleTimeString();
       entry.style.marginBottom = '4px';
       entry.style.borderBottom = '1px solid #333';
-      entry.innerHTML = `<span style="color:#666">[${time}]</span> ${log.message}`;
+      const timeSpan = document.createElement('span');
+      timeSpan.style.color = '#666';
+      timeSpan.textContent = `[${time}]`;
+      entry.appendChild(timeSpan);
+      entry.appendChild(document.createTextNode(' ' + log.message));
       logsList.prepend(entry);
     }
   });
