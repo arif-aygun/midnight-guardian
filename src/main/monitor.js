@@ -17,6 +17,12 @@ let shutdownInterval = null;  // Shutdown countdown interval
 let lastLoggedTitle = '';
 let lastLoggedState = '';
 
+// Check for environment variable override (for development)
+// Use function to ensure it's evaluated at runtime, not module load time
+function isDryRunMode() {
+    return process.env.DRY_RUN === 'true';
+}
+
 function addLog(message, type = 'info') {
     const log = {
         message,
@@ -154,6 +160,23 @@ function handleBlockedApp(processName, windowTitle, reason, config) {
     const now = Date.now();
     const maxWarnings = config.activeMonitoring.autoCloseAfterWarnings;
 
+    // STRICT MODE: Skip all warnings and close immediately
+    if (config.strictMode) {
+        addLog(`🔒 [STRICT] Blocking ${processName}: ${reason}`, 'warning');
+
+        // Immediate force close
+        if (isDryRunMode() || config.dryRun) {
+            addLog(`[DRY RUN] Would immediately close ${processName}`, 'success');
+        } else {
+            addLog(`🔨 Force closing ${processName} (Strict Mode)`, 'warning');
+            exec(`taskkill /IM "${processName}" /F`);
+        }
+
+        currentBlockedApp = null;
+        return;
+    }
+
+    // NORMAL MODE: Progressive warnings
     // Normalize key
     const appKey = processName;
 
@@ -206,12 +229,13 @@ function triggerFinalWarning(processName, config) {
         updateOverlay('FINAL WARNING', `Closing ${processName} in ${remaining}s...`);
         if (remaining <= 0) {
             clearInterval(countdown);
-            if (config.dryRun) {
+            // Check environment variable OR config setting
+            if (isDryRunMode() || config.dryRun) {
                 addLog(`[DRY RUN] Would close ${processName}`, 'success');
                 hideOverlay();
             } else {
                 addLog(`🔨 Force closing ${processName}`, 'warning');
-                exec(`taskkill /IM "${processName}.exe" /F`);
+                exec(`taskkill /IM "${processName}" /F`);
                 hideOverlay();
             }
             currentBlockedApp = null;
@@ -293,7 +317,8 @@ function initiateShutdownSequence(config, reason) {
         if (secondsLeft <= 0) {
             clearInterval(shutdownInterval);
             addLog('💤 Executing System Shutdown', 'warning');
-            if (!config.dryRun) {
+            // Check environment variable OR config setting
+            if (!isDryRunMode() && !config.dryRun) {
                 exec('shutdown /s /t 0');
             } else {
                 addLog('[DRY RUN] Shutdown command skipped', 'success');

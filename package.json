@@ -5,10 +5,16 @@
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
+    "dev": "cross-env DRY_RUN=true electron .",
+    "test": "cross-env DRY_RUN=true electron .",
     "dist": "electron-builder",
     "postinstall": "electron-builder install-app-deps"
   },
-  "keywords": ["distraction-blocker", "digital-wellbeing", "productivity"],
+  "keywords": [
+    "distraction-blocker",
+    "digital-wellbeing",
+    "productivity"
+  ],
   "author": "Ahmet Arif Aygün",
   "license": "MIT",
   "build": {
@@ -66,6 +72,7 @@
     "node-schedule": "^2.1.1"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "electron": "^40.1.0",
     "electron-builder": "^26.4.0",
     "nodemon": "^3.1.10"

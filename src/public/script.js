@@ -165,7 +165,17 @@ function renderChips(containerId, items, type) {
 // Logic Actions
 
 function toggleStrict() {
+  // Ensure activeMonitoring exists
+  if (!config.activeMonitoring) config.activeMonitoring = {};
+
+  // Toggle strict mode
   config.strictMode = !config.strictMode;
+
+  // If enabling strict mode, ensure monitoring is ON
+  if (config.strictMode) {
+    config.activeMonitoring.enabled = true;
+  }
+
   saveConfig();
 }
 

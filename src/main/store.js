@@ -55,7 +55,8 @@ let store = {};
 function loadStore() {
     try {
         if (fs.existsSync(CONFIG_PATH)) {
-            store = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+            const rawConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+            store = rawConfig;
             // Merge with defaults to ensure new keys exist
             if (store.isFirstRun === undefined) store.isFirstRun = false;
             store = { ...defaults, ...store };
