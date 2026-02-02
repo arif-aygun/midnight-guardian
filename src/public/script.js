@@ -156,11 +156,11 @@ function renderChips(containerId, items, type) {
   (items || []).forEach(item => {
     const chip = document.createElement('div');
     chip.className = `chip ${type}`;
-    
+
     // Add the keyword text safely
     const textNode = document.createTextNode(item);
     chip.appendChild(textNode);
-    
+
     // Add the remove ("×") control with a safe event listener
     const removeSpan = document.createElement('span');
     removeSpan.textContent = '×';
@@ -170,7 +170,7 @@ function renderChips(containerId, items, type) {
     removeSpan.addEventListener('click', () => {
       removeKeyword(type, item);
     });
-    
+
     chip.appendChild(removeSpan);
     container.appendChild(chip);
   });
