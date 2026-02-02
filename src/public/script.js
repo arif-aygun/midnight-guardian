@@ -34,6 +34,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   populateTimeSelects();
   setupHoverEvents();
+  
+  // Time Modal event listeners
+  const timeModalApply = document.getElementById('timeModalApply');
+  const timeModalCancel = document.getElementById('timeModalCancel');
+  
+  if (timeModalApply) {
+    timeModalApply.addEventListener('click', saveTimeModal);
+  }
+  
+  if (timeModalCancel) {
+    timeModalCancel.addEventListener('click', () => closeModal('timeModal'));
+  }
 });
 
 function setupHoverEvents() {
