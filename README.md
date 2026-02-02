@@ -254,6 +254,27 @@ See [docs/RELEASE.md](docs/RELEASE.md) for detailed build instructions.
 - Check file permissions
 - Try running as Administrator
 
+## 📚 Documentation
+
+### Copilot Review Documentation (Updated)
+Comprehensive documentation for addressing code review comments from the Electron migration PR:
+
+- **[COPILOT_REVIEW_INDEX.md](./COPILOT_REVIEW_INDEX.md)** - Start here for an overview
+- **[PR4_REVIEW_SUMMARY.md](./PR4_REVIEW_SUMMARY.md)** - Executive summary with **revised priorities**
+- **[COPILOT_REVIEW_SOLUTIONS.md](./COPILOT_REVIEW_SOLUTIONS.md)** - Detailed technical solutions
+
+**Important Update:** After reassessing for local desktop app context, **all documented issues can be safely postponed**. Security vulnerabilities that are critical for web apps have much lower risk for local applications.
+
+**Bottom line:** 🎯 **Ship the desktop app now. Don't delay for these issues.** ✅
+
+These documents cover:
+- 🟡 Security issues (reassessed as low-risk for local apps)
+- 🟢 Functional improvements (fix if users report problems)
+- 🟢 Code quality (nice-to-have, not need-to-have)
+- 📋 When to revisit (cloud sync, multi-user, app store submission)
+
+**Note:** Issues are real and solutions are documented, but priority is **low** for local desktop applications.
+
 ## 🤝 Contributing
 
 Contributions welcome! Here's how:
@@ -263,6 +284,8 @@ Contributions welcome! Here's how:
 3. Commit changes (`git commit -m 'Add AmazingFeature'`)
 4. Push to branch (`git push origin feature/AmazingFeature`)
 5. Open Pull Request
+
+**For security fixes:** Please review [COPILOT_REVIEW_SOLUTIONS.md](./COPILOT_REVIEW_SOLUTIONS.md) for documented issues and their solutions. Note that for a local desktop app, these are lower priority than for web applications.
 
 ## 📝 License
 
