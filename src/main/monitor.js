@@ -122,6 +122,18 @@ async function checkActiveWindow(config) {
             return;
         }
 
+        // --- 2.5. Allow Keywords Check (Override block keywords) ---
+        const hasAllowKeyword = config.allowKeywords?.some(k => windowTitle.includes(k.toLowerCase()));
+
+        if (hasAllowKeyword) {
+            if (currentBlockedApp) {
+                addLog(`✅ Allowed by keyword: ${window.title}`, 'success');
+                hideOverlay();
+                currentBlockedApp = null;
+            }
+            return;
+        }
+
         // --- 3. Enforcement Logic ---
         let shouldBlock = false;
         let blockReason = '';
