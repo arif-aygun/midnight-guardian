@@ -156,10 +156,22 @@ function renderChips(containerId, items, type) {
   (items || []).forEach(item => {
     const chip = document.createElement('div');
     chip.className = `chip ${type}`;
-    chip.innerHTML = `
-            ${item}
-            <span style="margin-left:4px; opacity:0.5; cursor:pointer;" onclick="removeKeyword('${type}', '${item.replace(/'/g, "\\'")}')">×</span>
-        `;
+
+    // Add the keyword text safely
+    const textNode = document.createTextNode(item);
+    chip.appendChild(textNode);
+
+    // Add the remove ("×") control with a safe event listener
+    const removeSpan = document.createElement('span');
+    removeSpan.textContent = '×';
+    removeSpan.style.marginLeft = '4px';
+    removeSpan.style.opacity = '0.5';
+    removeSpan.style.cursor = 'pointer';
+    removeSpan.addEventListener('click', () => {
+      removeKeyword(type, item);
+    });
+
+    chip.appendChild(removeSpan);
     container.appendChild(chip);
   });
 }
