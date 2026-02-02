@@ -116,10 +116,7 @@ The build configuration is defined in `package.json` under the `build` key:
 - **App ID**: `com.arifaygun.midnight-guardian`
 - **Product Name**: `Midnight Guardian`
 - **Output Directory**: `dist/`
-- **Icons**: Located in `build/` directory
-  - Windows: `icon.ico`
-  - macOS: `icon.icns`
-  - Linux: `icon.png`
+- **Icon**: `build/icon.ico` (Windows)
 
 ## Troubleshooting
 
@@ -134,7 +131,7 @@ The build configuration is defined in `package.json` under the `build` key:
 1. Check the workflow run logs in the Actions tab
 2. Ensure the tag format is correct (`v*` pattern)
 3. Verify all dependencies in `package.json` are valid
-4. Check that icons exist in the `build/` directory
+4. Check that the icon file exists: `build/icon.ico`
 
 ### Tag already exists
 
