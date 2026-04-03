@@ -152,6 +152,10 @@ ipcMain.handle('get-config', async () => {
     return getStore();
 });
 
+ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
+});
+
 ipcMain.handle('save-config', async (event, newConfig) => {
     // Update store with all changes at once
     updateStore(newConfig);
