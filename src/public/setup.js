@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Set Navigation Listeners
     document.getElementById('nextBtn').addEventListener('click', nextStep);
     document.getElementById('backBtn').addEventListener('click', prevStep);
+    document.getElementById('skipBtn').addEventListener('click', skipStep);
 
     // Set initial values from activeMonitoring
     if (config.activeMonitoring) {
@@ -33,15 +34,17 @@ function updateUI() {
     // Update Buttons
     const backBtn = document.getElementById('backBtn');
     const nextBtn = document.getElementById('nextBtn');
+    const skipBtn = document.getElementById('skipBtn');
 
     backBtn.style.visibility = currentStep === 1 ? 'hidden' : 'visible';
+    skipBtn.style.display = currentStep === 3 ? 'inline-block' : 'none';
 
     if (currentStep === totalSteps) {
-        nextBtn.textContent = 'Finish';
-        nextBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        nextBtn.textContent = 'Finish ✓';
+        nextBtn.classList.add('finish');
     } else {
-        nextBtn.textContent = 'Next';
-        nextBtn.style.background = '';
+        nextBtn.textContent = 'Next →';
+        nextBtn.classList.remove('finish');
     }
 }
 
@@ -59,6 +62,12 @@ function prevStep() {
         currentStep--;
         updateUI();
     }
+}
+
+function skipStep() {
+    // Skip bedtime setup — user can configure it later from the dashboard
+    currentStep++;
+    updateUI();
 }
 
 async function finishSetup() {

@@ -3,6 +3,9 @@ let currentModalType = '';
 
 document.addEventListener('DOMContentLoaded', () => {
   loadConfig();
+  window.electronAPI.getAppVersion().then(v => {
+    document.getElementById('appVersion').textContent = `v${v}`;
+  });
 
   // Modal background click close
   document.querySelectorAll('.modal-overlay').forEach(overlay => {

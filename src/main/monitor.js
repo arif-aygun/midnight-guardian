@@ -8,6 +8,7 @@ const { showOverlay, hideOverlay, updateOverlay } = require('./overlay');
 
 let monitorTimeout = null;
 let currentBlockedApp = null;
+let lastBlockedWindowTitle = '';
 let warningCount = 0;
 let lastWarningTime = 0;
 let blockedAppHistory = {};
@@ -118,7 +119,12 @@ async function checkActiveWindow(config) {
         // --- 1.5. Self-Protection: Ignore Own Windows ---
         // If the active window is the Guardian itself (Overlay, Dashboard), ignore it.
         // This prevents the "Unrestricted App" reset when interacting with the overlay.
+        // However, if a blocked app already has an active warning sequence, continue it
+        // based on elapsed time so the overlay stealing focus doesn't stall enforcement.
         if (processName.includes('electron') || processName.includes('midnight-guardian')) {
+            if (currentBlockedApp) {
+                handleBlockedApp(currentBlockedApp, lastBlockedWindowTitle, 'Previously blocked', config);
+            }
             return;
         }
 
@@ -171,6 +177,7 @@ async function checkActiveWindow(config) {
         }
 
         if (shouldBlock) {
+            lastBlockedWindowTitle = window.title;
             handleBlockedApp(processName, window.title, blockReason, config);
         } else if (currentBlockedApp) {
             addLog(`✅ Unrestricted App`, 'info');
