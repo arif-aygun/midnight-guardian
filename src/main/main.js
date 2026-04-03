@@ -2,7 +2,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, shell, screen } = require('elec
 const path = require('path');
 const isDev = require('electron-is-dev');
 const { setupMonitor, stopMonitor } = require('./monitor');
-const { getStore, setStoreValue, updateStore } = require('./store');
+const { getStore, setStoreValue, updateStore, resetStore } = require('./store');
 
 let mainWindow;
 let tray;
@@ -204,6 +204,28 @@ ipcMain.on('quit-app', () => {
 // functionality needs to be added to monitor.js to emit events
 ipcMain.on('hide-overlay', () => {
     require('./overlay').hideOverlay();
+});
+
+ipcMain.handle('reset-data', async () => {
+    const { dialog } = require('electron');
+    const result = await dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'Reset All Data',
+        message: 'This will clear all settings and restart the setup wizard. Are you sure?',
+        buttons: ['Cancel', 'Reset'],
+        defaultId: 0,
+        cancelId: 0
+    });
+
+    if (result.response === 1) {
+        stopMonitor();
+        resetStore();
+        if (mainWindow) {
+            mainWindow.loadFile(path.join(__dirname, '..', 'public', 'setup.html'));
+        }
+        return { success: true };
+    }
+    return { success: false };
 });
 
 ipcMain.on('setup-complete', () => {

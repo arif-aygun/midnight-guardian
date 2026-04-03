@@ -103,8 +103,20 @@ function updateStore(updates) {
     saveStore();
 }
 
+function resetStore() {
+    try {
+        if (fs.existsSync(CONFIG_PATH)) {
+            fs.unlinkSync(CONFIG_PATH);
+        }
+        store = {};
+    } catch (error) {
+        console.error('Error resetting config:', error);
+    }
+}
+
 module.exports = {
     getStore,
     setStoreValue,
-    updateStore
+    updateStore,
+    resetStore
 };
