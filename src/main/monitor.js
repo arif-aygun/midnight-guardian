@@ -25,6 +25,35 @@ function isDryRunMode() {
     return process.env.DRY_RUN === 'true';
 }
 
+// Pure time-window check — exported for unit testing
+function isTimeInWindow(start, end, currentMins) {
+    if (!start || !end) return false;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    const sMins = sh * 60 + sm;
+    const eMins = eh * 60 + em;
+    if (sMins <= eMins) return currentMins >= sMins && currentMins < eMins;
+    else return currentMins >= sMins || currentMins < eMins;
+}
+
+// Resets all module-level state — used in tests to isolate each case
+function resetState() {
+    if (monitorTimeout) clearTimeout(monitorTimeout);
+    if (countdownInterval) clearInterval(countdownInterval);
+    if (shutdownInterval) clearInterval(shutdownInterval);
+    monitorTimeout = null;
+    currentBlockedApp = null;
+    lastBlockedWindowTitle = '';
+    warningCount = 0;
+    lastWarningTime = 0;
+    blockedAppHistory = {};
+    appWarningCounts = {};
+    countdownInterval = null;
+    shutdownInterval = null;
+    lastLoggedTitle = '';
+    lastLoggedState = '';
+}
+
 function addLog(message, type = 'info') {
     const log = {
         message,
@@ -87,18 +116,8 @@ async function checkActiveWindow(config) {
         const now = new Date();
         const currentMins = now.getHours() * 60 + now.getMinutes();
 
-        const isTimeInWindow = (start, end) => {
-            if (!start || !end) return false;
-            const [sh, sm] = start.split(':').map(Number);
-            const [eh, em] = end.split(':').map(Number);
-            const sMins = sh * 60 + sm;
-            const eMins = eh * 60 + em;
-            if (sMins <= eMins) return currentMins >= sMins && currentMins < eMins;
-            else return currentMins >= sMins || currentMins < eMins;
-        };
-
         const inActiveWindow = config.activeMonitoring?.enabled &&
-            isTimeInWindow(config.activeMonitoring.startTime, config.activeMonitoring.endTime);
+            isTimeInWindow(config.activeMonitoring.startTime, config.activeMonitoring.endTime, currentMins);
 
         if (!inActiveWindow) {
             if (lastLoggedState !== 'outside-window') {
@@ -381,5 +400,14 @@ function initiateShutdownSequence(config, reason) {
 
 module.exports = {
     setupMonitor,
-    stopMonitor
+    stopMonitor,
+    // Exported for unit testing
+    isTimeInWindow,
+    checkActiveWindow,
+    handleBlockedApp,
+    triggerFinalWarning,
+    refreshScheduler,
+    initiateShutdownSequence,
+    resetState,
+    isDryRunMode,
 };
