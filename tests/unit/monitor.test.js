@@ -244,6 +244,31 @@ describe('checkActiveWindow', () => {
         await checkActiveWindow(config); // now unrestricted
         expect(hideOverlay).toHaveBeenCalled();
     });
+
+    // ------- Bug #20: exe name from owner.path for taskkill -------
+    test('uses exe basename from owner.path for taskkill when display name differs (bug #20)', async () => {
+        const config = makeConfig({
+            strictMode: true,
+            blocklist: { processes: ['google chrome'], domains: [] },
+        });
+        activeWin.mockResolvedValue({
+            owner: {
+                name: 'Google Chrome',
+                path: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            },
+            title: 'YouTube - Google Chrome',
+        });
+        await checkActiveWindow(config);
+        expect(exec).toHaveBeenCalledWith(expect.stringContaining('chrome.exe'));
+        expect(exec).not.toHaveBeenCalledWith(expect.stringContaining('google chrome'));
+    });
+
+    test('falls back to processName for taskkill when owner.path is not provided', async () => {
+        const config = makeConfig({ strictMode: true });
+        activeWin.mockResolvedValue({ owner: { name: 'steam.exe' }, title: 'Steam' });
+        await checkActiveWindow(config);
+        expect(exec).toHaveBeenCalledWith(expect.stringContaining('steam.exe'));
+    });
 });
 
 // ===========================================================================
