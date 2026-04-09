@@ -85,6 +85,13 @@
             background: #1e80e0;
         }
 
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+            opacity: 0.6;
+        }
+
         /* Minimalist Monitor Mode */
         #shutdownTimer {
             display: none;
@@ -176,10 +183,12 @@
                     container.classList.add('urgent');
                     iconEl.textContent = '🛑';
                     okBtn.textContent = 'Closing Soon...';
+                    okBtn.disabled = true;
                 } else {
                     container.classList.remove('urgent');
                     iconEl.textContent = '⚠️';
                     okBtn.textContent = 'I Understand';
+                    okBtn.disabled = false;
                 }
             });
         }

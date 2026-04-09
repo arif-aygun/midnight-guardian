@@ -106,9 +106,14 @@
                     <span class="section-icon">⚙️</span> System
                 </div>
                 <div
-                    style="background: var(--card-bg); border-radius: 6px; padding: 10px; border: 1px solid var(--border); display:flex; justify-content:space-between;">
+                    style="background: var(--card-bg); border-radius: 6px; padding: 10px; border: 1px solid var(--border); display:flex; justify-content:space-between; margin-bottom: 6px;">
                     <span style="font-size:11px; color:var(--text-secondary);">Run on Startup</span>
                     <input type="checkbox" id="runOnStartup" onclick="saveConfig()">
+                </div>
+                <div
+                    style="background: var(--card-bg); border-radius: 6px; padding: 10px; border: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:11px; color:var(--text-secondary);">Reset All Data</span>
+                    <button class="pill-btn" style="color:#ff6b6b; border-color:#ff6b6b33;" onclick="window.electronAPI.resetData()">Reset</button>
                 </div>
             </div>
 

@@ -1,12 +1,14 @@
 {
   "name": "midnight-guardian",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Smart distraction blocker for Windows that helps you maintain healthy digital habits and protect your sleep schedule.",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "cross-env DRY_RUN=true electron .",
-    "test": "cross-env DRY_RUN=true electron .",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "electron": "cross-env DRY_RUN=true electron .",
     "dist": "electron-builder",
     "postinstall": "electron-builder install-app-deps"
   },
@@ -77,6 +79,7 @@
     "cross-env": "^10.1.0",
     "electron": "^40.1.0",
     "electron-builder": "^26.4.0",
+    "jest": "^29.7.0",
     "nodemon": "^3.1.10"
   }
 }

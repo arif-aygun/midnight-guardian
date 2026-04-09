@@ -27,5 +27,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setIgnoreMouseEvents: (ignore, options) => ipcRenderer.send('set-ignore-mouse-events', ignore, options),
 
     completeSetup: () => ipcRenderer.send('setup-complete'),
-    getAppVersion: () => ipcRenderer.invoke('get-app-version')
+    getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+    resetData: () => ipcRenderer.invoke('reset-data')
 });

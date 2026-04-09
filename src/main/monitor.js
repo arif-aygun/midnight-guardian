@@ -9,6 +9,7 @@ const { showOverlay, hideOverlay, updateOverlay } = require('./overlay');
 let monitorTimeout = null;
 let currentBlockedApp = null;
 let lastBlockedWindowTitle = '';
+let lastBlockedExeName = '';
 let warningCount = 0;
 let lastWarningTime = 0;
 let blockedAppHistory = {};
@@ -23,6 +24,36 @@ let lastLoggedState = '';
 // Use function to ensure it's evaluated at runtime, not module load time
 function isDryRunMode() {
     return process.env.DRY_RUN === 'true';
+}
+
+// Pure time-window check — exported for unit testing
+function isTimeInWindow(start, end, currentMins) {
+    if (!start || !end) return false;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    const sMins = sh * 60 + sm;
+    const eMins = eh * 60 + em;
+    if (sMins <= eMins) return currentMins >= sMins && currentMins < eMins;
+    else return currentMins >= sMins || currentMins < eMins;
+}
+
+// Resets all module-level state — used in tests to isolate each case
+function resetState() {
+    if (monitorTimeout) clearTimeout(monitorTimeout);
+    if (countdownInterval) clearInterval(countdownInterval);
+    if (shutdownInterval) clearInterval(shutdownInterval);
+    monitorTimeout = null;
+    currentBlockedApp = null;
+    lastBlockedWindowTitle = '';
+    lastBlockedExeName = '';
+    warningCount = 0;
+    lastWarningTime = 0;
+    blockedAppHistory = {};
+    appWarningCounts = {};
+    countdownInterval = null;
+    shutdownInterval = null;
+    lastLoggedTitle = '';
+    lastLoggedState = '';
 }
 
 function addLog(message, type = 'info') {
@@ -87,18 +118,8 @@ async function checkActiveWindow(config) {
         const now = new Date();
         const currentMins = now.getHours() * 60 + now.getMinutes();
 
-        const isTimeInWindow = (start, end) => {
-            if (!start || !end) return false;
-            const [sh, sm] = start.split(':').map(Number);
-            const [eh, em] = end.split(':').map(Number);
-            const sMins = sh * 60 + sm;
-            const eMins = eh * 60 + em;
-            if (sMins <= eMins) return currentMins >= sMins && currentMins < eMins;
-            else return currentMins >= sMins || currentMins < eMins;
-        };
-
         const inActiveWindow = config.activeMonitoring?.enabled &&
-            isTimeInWindow(config.activeMonitoring.startTime, config.activeMonitoring.endTime);
+            isTimeInWindow(config.activeMonitoring.startTime, config.activeMonitoring.endTime, currentMins);
 
         if (!inActiveWindow) {
             if (lastLoggedState !== 'outside-window') {
@@ -115,6 +136,8 @@ async function checkActiveWindow(config) {
 
         const processName = window.owner.name.toLowerCase();
         const windowTitle = window.title.toLowerCase();
+        // Use the actual executable name (from path) for taskkill — owner.name can be a display name
+        const exeName = path.basename(window.owner.path || '').toLowerCase() || processName;
 
         // --- 1.5. Self-Protection: Ignore Own Windows ---
         // If the active window is the Guardian itself (Overlay, Dashboard), ignore it.
@@ -123,7 +146,7 @@ async function checkActiveWindow(config) {
         // based on elapsed time so the overlay stealing focus doesn't stall enforcement.
         if (processName.includes('electron') || processName.includes('midnight-guardian')) {
             if (currentBlockedApp) {
-                handleBlockedApp(currentBlockedApp, lastBlockedWindowTitle, 'Previously blocked', config);
+                handleBlockedApp(currentBlockedApp, lastBlockedWindowTitle, 'Previously blocked', config, lastBlockedExeName);
             }
             return;
         }
@@ -178,7 +201,8 @@ async function checkActiveWindow(config) {
 
         if (shouldBlock) {
             lastBlockedWindowTitle = window.title;
-            handleBlockedApp(processName, window.title, blockReason, config);
+            lastBlockedExeName = exeName;
+            handleBlockedApp(processName, window.title, blockReason, config, exeName);
         } else if (currentBlockedApp) {
             addLog(`✅ Unrestricted App`, 'info');
             hideOverlay();
@@ -196,7 +220,7 @@ async function checkActiveWindow(config) {
 
 
 
-function handleBlockedApp(processName, windowTitle, reason, config) {
+function handleBlockedApp(processName, windowTitle, reason, config, exeName = processName) {
     const now = Date.now();
     const maxWarnings = config.activeMonitoring.autoCloseAfterWarnings;
 
@@ -209,7 +233,7 @@ function handleBlockedApp(processName, windowTitle, reason, config) {
             addLog(`[DRY RUN] Would immediately close ${processName}`, 'success');
         } else {
             addLog(`🔨 Force closing ${processName} (Strict Mode)`, 'warning');
-            exec(`taskkill /IM "${processName}" /F`);
+            exec(`taskkill /IM "${exeName}" /F`);
         }
 
         if (countdownInterval) {
@@ -239,7 +263,7 @@ function handleBlockedApp(processName, windowTitle, reason, config) {
 
         if (currentCount >= maxWarnings) {
             // Final warning / Force close logic
-            triggerFinalWarning(processName, config);
+            triggerFinalWarning(processName, config, exeName);
         } else {
             // Standard Warning
             addLog(`🚫 Blocked ${processName} (${reason}) - Warning ${currentCount}/${maxWarnings}`, 'warning');
@@ -254,7 +278,7 @@ function handleBlockedApp(processName, windowTitle, reason, config) {
             const currentCount = appWarningCounts[appKey];
 
             if (currentCount >= maxWarnings) {
-                triggerFinalWarning(processName, config);
+                triggerFinalWarning(processName, config, exeName);
             } else {
                 addLog(`⚠️ ${processName} - Warning ${currentCount}/${maxWarnings}`, 'warning');
                 showOverlay('Restricted App Detected', `${processName} is blocked.\nWarning ${currentCount}/${maxWarnings}`);
@@ -263,7 +287,7 @@ function handleBlockedApp(processName, windowTitle, reason, config) {
     }
 }
 
-function triggerFinalWarning(processName, config) {
+function triggerFinalWarning(processName, config, exeName = processName) {
     addLog(`🚨 FINAL WARNING: ${processName} will be closed`, 'warning');
     showOverlay('FINAL WARNING', `Closing ${processName} in 10 seconds!`, true);
 
@@ -286,7 +310,7 @@ function triggerFinalWarning(processName, config) {
                 hideOverlay();
             } else {
                 addLog(`🔨 Force closing ${processName}`, 'warning');
-                exec(`taskkill /IM "${processName}" /F`);
+                exec(`taskkill /IM "${exeName}" /F`);
                 hideOverlay();
             }
             currentBlockedApp = null;
@@ -381,5 +405,14 @@ function initiateShutdownSequence(config, reason) {
 
 module.exports = {
     setupMonitor,
-    stopMonitor
+    stopMonitor,
+    // Exported for unit testing
+    isTimeInWindow,
+    checkActiveWindow,
+    handleBlockedApp,
+    triggerFinalWarning,
+    refreshScheduler,
+    initiateShutdownSequence,
+    resetState,
+    isDryRunMode,
 };
