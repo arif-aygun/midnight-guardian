@@ -1,6 +1,6 @@
 {
   "name": "midnight-guardian",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Smart distraction blocker for Windows that helps you maintain healthy digital habits and protect your sleep schedule.",
   "main": "src/main/main.js",
   "scripts": {
