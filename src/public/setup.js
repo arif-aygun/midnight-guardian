@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Populate Time Selects
     populateTimeSelects();
 
+    // Initialize UI state
+    updateUI();
+
     // Load default config
     config = await window.electronAPI.getConfig();
 
